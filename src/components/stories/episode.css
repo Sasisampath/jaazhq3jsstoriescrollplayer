@@ -1,0 +1,393 @@
+/* ════════════════════════════════════════════════════════════
+   FIRST TAKE episode pages — page-scoped styles (prefixed ep-).
+   Header, footer and the grid background come from the shared
+   JazzHQ components and are not redefined here.
+   ════════════════════════════════════════════════════════════ */
+
+.ep-page {
+  --ep-ink: #242424;
+  --ep-muted: #6a7077;
+  --ep-purple: #564ef0;
+  --ep-line: #e5e2d9;
+  --ep-font-display: var(--font-plus-jakarta), "Plus Jakarta Sans", sans-serif;
+  --ep-font-mono: var(--font-geist-mono), "Geist Mono", ui-monospace, monospace;
+  --ep-ease: cubic-bezier(0.22, 0.9, 0.24, 1);
+  color: var(--ep-ink);
+  overflow-x: clip;
+}
+
+.ep-page :focus-visible {
+  outline: 2px solid var(--ep-purple);
+  outline-offset: 3px;
+}
+
+.ep-article {
+  max-width: calc(1100px + var(--page-padding) * 2);
+  padding-top: clamp(40px, 7vw, 88px);
+}
+
+/* ── Head ── */
+.ep-head {
+  max-width: 860px;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.ep-eyebrow {
+  margin: 0;
+  font-family: var(--ep-font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  color: var(--ep-muted);
+}
+
+.ep-eyebrow a {
+  color: var(--ep-ink);
+  transition: color 0.2s ease;
+}
+
+.ep-eyebrow a:hover {
+  color: var(--ep-purple);
+}
+
+.ep-title {
+  margin: 18px 0 0;
+  font-family: var(--ep-font-display);
+  font-size: clamp(30px, 4.6vw, 56px);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.ep-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 18px;
+  margin: 18px 0 0;
+  font-size: 16px;
+  color: var(--ep-muted);
+}
+
+.ep-meta span + span::before {
+  content: "·";
+  margin-right: 18px;
+  color: #c3bfb5;
+}
+
+/* ── 16:9 media ── */
+.ep-media {
+  margin-top: clamp(28px, 4vw, 48px);
+}
+
+.ep-media__frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #111014;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.06), 0 30px 60px -30px rgb(30 22 10 / 0.45);
+}
+
+.ep-media__frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.ep-media__poster {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  cursor: pointer;
+}
+
+.ep-media__poster img {
+  object-fit: contain;
+}
+
+.ep-media__play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.92);
+  box-shadow: 0 10px 30px -10px rgb(20 16 40 / 0.5);
+  transform: translate(-50%, -50%);
+  transition: transform 0.3s var(--ep-ease), background 0.2s ease;
+}
+
+.ep-media__play svg {
+  width: 30px;
+  height: 30px;
+  margin-left: 4px;
+  fill: var(--ep-ink);
+}
+
+.ep-media__poster:hover .ep-media__play,
+.ep-media__poster:focus-visible .ep-media__play {
+  background: #fff;
+  transform: translate(-50%, -50%) scale(1.05);
+}
+
+.ep-media__links {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin: 16px 0 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ep-media__links a,
+.ep-media__links button {
+  color: var(--ep-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* ── About / pager ── */
+.ep-section-title {
+  margin: 0;
+  font-family: var(--ep-font-display);
+  font-size: clamp(24px, 2.6vw, 32px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.ep-about {
+  max-width: 760px;
+  margin: clamp(48px, 6vw, 80px) auto 0;
+}
+
+.ep-about p {
+  margin: 16px 0 0;
+  font-size: 17px;
+  line-height: 1.7;
+  color: #3d434a;
+}
+
+.ep-pager {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: clamp(48px, 6vw, 72px);
+  padding-top: 24px;
+  border-top: 1px solid var(--ep-line);
+}
+
+.ep-pager__link {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.ep-pager__link:hover {
+  border-color: var(--ep-line);
+  background: rgb(255 255 255 / 0.6);
+}
+
+.ep-pager__link--next {
+  text-align: right;
+}
+
+.ep-pager__dir {
+  font-family: var(--ep-font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ep-muted);
+}
+
+.ep-pager__title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* ── More from First Take ── */
+.ep-more {
+  --case-w: min(420px, 74vw);
+  padding: clamp(64px, 8vw, 112px) 0 clamp(72px, 9vw, 120px);
+}
+
+.ep-more__head {
+  max-width: calc(1100px + var(--page-padding) * 2);
+}
+
+.ep-more__track {
+  display: flex;
+  gap: clamp(16px, 3vw, 40px);
+  margin: 28px 0 0;
+  padding: 36px calc(50% - var(--case-w) / 2) 48px;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  perspective: 1400px;
+  cursor: grab;
+}
+
+.ep-more__track::-webkit-scrollbar {
+  display: none;
+}
+
+.ep-more__track.is-dragging {
+  scroll-snap-type: none;
+  cursor: grabbing;
+}
+
+.ep-more__track.is-dragging .ep-case__link {
+  pointer-events: none;
+}
+
+/* Scroll-linked pose: --d is the signed distance from the centre in case widths. */
+.ep-case {
+  --d: 0;
+  --ad: 0;
+  flex: 0 0 var(--case-w);
+  scroll-snap-align: center;
+  transform-style: preserve-3d;
+  transform: translateZ(calc(var(--ad) * -70px)) rotateY(calc(var(--d) * -16deg));
+  opacity: calc(1 - var(--ad) * 0.28);
+}
+
+.ep-case__link {
+  display: block;
+  transform-style: preserve-3d;
+  transition: transform 0.6s var(--ep-ease);
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+.ep-case__body {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  transform-style: preserve-3d;
+}
+
+/* Thin case: the cover, a spine turned back along the left edge, plastic edge light. */
+.ep-case__cover {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #111014;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.14),
+    0 1px 2px rgb(16 24 40 / 0.08),
+    0 18px 30px -18px rgb(40 30 14 / 0.5);
+  transition: box-shadow 0.6s var(--ep-ease);
+}
+
+.ep-case__cover img {
+  object-fit: contain;
+}
+
+.ep-case__spine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 14px;
+  display: grid;
+  place-items: start center;
+  padding-top: 8px;
+  border-radius: 3px 0 0 3px;
+  background: linear-gradient(90deg, #e7e2d8, #f6f2ea);
+  transform-origin: left center;
+  transform: rotateY(90deg);
+  font-family: var(--ep-font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  color: #4b4740;
+}
+
+.ep-case__meta {
+  display: block;
+  margin-top: 14px;
+  font-family: var(--ep-font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-align: center;
+  color: var(--ep-muted);
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.3s ease, transform 0.3s var(--ep-ease);
+}
+
+.ep-case__now {
+  color: var(--ep-purple);
+}
+
+/* Centred, hovered or focused: the minimal metadata shows. */
+.ep-case.is-centre .ep-case__meta,
+.ep-case__link:hover .ep-case__meta,
+.ep-case__link:focus-visible .ep-case__meta {
+  opacity: 1;
+  transform: none;
+}
+
+/* Hover: lifted out of the collection, turned a few degrees toward the viewer. */
+@media (hover: hover) {
+  .ep-case__link:hover {
+    transform: translate3d(0, -8px, 28px) rotateY(calc(var(--d) * 6deg)) rotateX(2deg) scale(1.03);
+  }
+
+  .ep-case__link:hover .ep-case__cover {
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / 0.18),
+      0 2px 4px rgb(16 24 40 / 0.08),
+      0 30px 44px -22px rgb(40 30 14 / 0.55);
+  }
+}
+
+.ep-case__link:focus-visible {
+  outline-offset: 6px;
+  border-radius: 8px;
+}
+
+@media (max-width: 639px) {
+  .ep-pager {
+    grid-template-columns: 1fr;
+  }
+
+  .ep-pager__link--next {
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ep-case {
+    transform: none;
+    opacity: 1;
+  }
+
+  .ep-case__link,
+  .ep-case__cover,
+  .ep-case__meta,
+  .ep-media__play {
+    transition: none;
+  }
+
+  .ep-case__link:hover {
+    transform: none;
+  }
+}
