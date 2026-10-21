@@ -12,8 +12,11 @@ type Item = { id: string; label: string };
 const REDUCED = "(prefers-reduced-motion: reduce)";
 const DESKTOP = 1024;
 
+/** Everything pinned above the article: the site header plus the "Back to First Take" row. */
 function headerHeight() {
-  return document.querySelector<HTMLElement>(".site-header")?.getBoundingClientRect().height ?? 72;
+  const header = document.querySelector<HTMLElement>(".site-header")?.getBoundingClientRect().height ?? 72;
+  const back = document.querySelector<HTMLElement>(".ep-back")?.getBoundingClientRect().height ?? 0;
+  return header + back;
 }
 
 /** Where a jumped-to section's heading lands: just under the header (and the mobile contents bar). */

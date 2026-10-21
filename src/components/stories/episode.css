@@ -21,6 +21,58 @@
   outline-offset: 3px;
 }
 
+/* ── "← Back to First Take": a quiet row pinned under the site header ── */
+.ep-back,
+.ep-page {
+  --ep-back-h: 44px;
+}
+
+.ep-back {
+  position: sticky;
+  top: 72px;
+  z-index: 40;
+  height: var(--ep-back-h);
+  border-bottom: 1px solid var(--stroke, #e6e8ea);
+  background: var(--background, #f7f6f2);
+}
+
+.ep-back__inner {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  max-width: var(--max-content, 1400px);
+  margin-inline: auto;
+  padding-inline: var(--page-padding);
+}
+
+.ep-back a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #4a5058;
+  transition: color 0.2s ease;
+}
+
+.ep-back a:hover {
+  color: var(--color-text-primary, #101828);
+}
+
+.ep-back a:focus-visible {
+  outline: 2px solid #564ef0;
+  outline-offset: 3px;
+}
+
+.ep-back a span {
+  transition: transform 0.2s ease;
+}
+
+.ep-back a:hover span {
+  transform: translateX(-3px);
+}
+
 /* ── Hero: eyebrow, title, standfirst, meta ── */
 .ep-hero {
   max-width: calc(900px + var(--page-padding) * 2);
@@ -88,7 +140,7 @@
 
 .ep-media {
   margin-top: clamp(32px, 4vw, 48px);
-  scroll-margin-top: 96px;
+  scroll-margin-top: 140px;
 }
 
 .ep-media__frame {
@@ -207,8 +259,8 @@
 
 .ep-toc__desktop {
   position: sticky;
-  top: 104px;
-  max-height: calc(100dvh - 128px);
+  top: calc(72px + var(--ep-back-h) + 32px);
+  max-height: calc(100dvh - 72px - var(--ep-back-h) - 56px);
   overflow-y: auto;
   scrollbar-width: thin;
   padding: 4px 8px 8px 0;
@@ -275,7 +327,7 @@
 }
 
 .ep-prose__section {
-  scroll-margin-top: 120px;
+  scroll-margin-top: calc(72px + var(--ep-back-h) + 32px);
 }
 
 .ep-prose__section + .ep-prose__section {
@@ -504,7 +556,7 @@
 
   .ep-toc {
     position: sticky;
-    top: 72px;
+    top: calc(72px + var(--ep-back-h));
     z-index: 20;
     margin: 0 calc(var(--page-padding) * -1) 32px;
     padding: 8px var(--page-padding);
@@ -572,7 +624,7 @@
   }
 
   .ep-prose__section {
-    scroll-margin-top: 150px;
+    scroll-margin-top: calc(72px + var(--ep-back-h) + 88px);
   }
 }
 
@@ -722,6 +774,15 @@
 }
 
 @media (max-width: 639px) {
+  .ep-back,
+  .ep-page {
+    --ep-back-h: 40px;
+  }
+
+  .ep-back a {
+    font-size: 13px;
+  }
+
   .ep-prose {
     font-size: 17px;
     line-height: 1.75;

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { GridBackground } from "@/components/layout/grid-background";
 import { Header } from "@/components/layout/header";
 import Footer from "@/components/shared/footer";
+import { BackToFirstTake } from "@/components/stories/back-to-first-take";
 import { EpisodeArticle } from "@/components/stories/episode-article";
 import { EpisodeMedia } from "@/components/stories/episode-media";
 import { EpisodeToc } from "@/components/stories/episode-toc";
@@ -80,6 +81,7 @@ export default async function EpisodePage({ params }: Props) {
   return (
     <GridBackground>
       <Header />
+      <BackToFirstTake slug={episode.slug} />
       <main className="ep-page flex-1">
         <article aria-labelledby="ep-title">
           <header className="page-section ep-hero">

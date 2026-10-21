@@ -13,6 +13,7 @@ import {
   watchUrl,
 } from "@/data/episodes";
 import type { ScreenRect, StoriesScene } from "./stories-console-scene";
+import { markNotesFromConsole } from "./back-to-first-take";
 
 /* FIRST TAKE — BY JAZZHQ: one console, driven by scroll.
    The tall track is only a scroll distance; the stage stays sticky inside it and
@@ -361,7 +362,7 @@ export function StoriesConsole() {
                       <button type="button" className="st-screen__watch" onClick={() => setPlaying(true)}>
                         Watch episode
                       </button>
-                      <Link className="st-screen__notes" href={episodeHref(loadedEpisode)}>
+                      <Link className="st-screen__notes" href={episodeHref(loadedEpisode)} onClick={() => markNotesFromConsole(loadedEpisode.slug)}>
                         Read episode notes →
                       </Link>
                     </div>
