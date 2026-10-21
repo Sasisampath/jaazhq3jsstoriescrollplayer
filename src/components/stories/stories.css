@@ -295,6 +295,15 @@
   opacity: 0;
 }
 
+/* While watching, only the console and its screen: heading, captions and hints step aside. */
+.st-stories.is-viewing .st-head,
+.st-stories.is-viewing .st-shelf,
+.st-stories.is-viewing .st-label,
+.st-stories.is-viewing .st-hint {
+  opacity: 0 !important;
+  transition: opacity 0.3s ease;
+}
+
 /* Selected episode: watch is the primary action, the notes page a quiet link. */
 .st-screen__actions {
   position: absolute;

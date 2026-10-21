@@ -29,7 +29,7 @@ const moreConversations = media.filter((m) => m.collection === "more-conversatio
 const NUDGE_INDEX = media.indexOf(firstTake[firstTake.length - 1]);
 /** Already in the player when the page opens, so the console reads as a working player.
     This is a demo state, not the visitor's choice. */
-const DEFAULT_INDEX = Math.max(0, media.findIndex((m) => m.episode?.episode === 3));
+const DEFAULT_INDEX = Math.max(0, media.findIndex((m) => m.episode?.episode === 2));
 
 /* Until the visitor deliberately selects a case, the journey holds at the
    FIRST TAKE shelf: the scroll track is shortened (in CSS) so the page simply
@@ -126,6 +126,34 @@ export function StoriesConsole() {
   const [loaded, setLoaded] = useState<number | null>(null);
   const [screenUp, setScreenUp] = useState(false);
   const [playing, setPlaying] = useState(false);
+  // "Watch" first moves the camera to the canonical square-on view; the player mounts only once it arrives.
+  const [watchPending, setWatchPending] = useState(false);
+  const viewingRef = useRef(false);
+
+  const watch = useCallback(() => {
+    const scene = sceneRef.current;
+    if (viewingRef.current) return;
+    viewingRef.current = true;
+    if (!scene) {
+      setPlaying(true);
+      return;
+    }
+    setWatchPending(true);
+    scene.view(true, () => {
+      if (!viewingRef.current) return;
+      setWatchPending(false);
+      setPlaying(true);
+    });
+  }, []);
+
+  // Exit video (or anything that ends playback): unmount the player and give the camera back to scroll.
+  const stopWatching = useCallback(() => {
+    if (!viewingRef.current) return;
+    viewingRef.current = false;
+    setWatchPending(false);
+    setPlaying(false);
+    sceneRef.current?.view(false);
+  }, []);
   const [hint, setHint] = useState<Hint>("explore");
   const [hovered, setHovered] = useState<number | null>(null);
   const [guide, setGuide] = useState<Guide>("preview");
@@ -160,7 +188,7 @@ export function StoriesConsole() {
       advanceGuide("done");
       userSelectedRef.current = true;
       setUserSelected(true);
-      setPlaying(false);
+      stopWatching();
       save(index);
       if (index === selectedRef.current) {
         sceneRef.current?.acknowledge(); // already in the player: just a status-light nod
@@ -169,7 +197,7 @@ export function StoriesConsole() {
       setSelected(index);
       sceneRef.current?.select(index);
     },
-    [advanceGuide],
+    [advanceGuide, stopWatching],
   );
 
   useEffect(() => {
@@ -254,7 +282,7 @@ export function StoriesConsole() {
         el.style.height = `${rect.height}px`;
       }
       setScreenUp(usable);
-      if (!usable) setPlaying(false);
+      if (!usable && !viewingRef.current) setPlaying(false);
     };
 
     const start = async () => {
@@ -444,7 +472,7 @@ export function StoriesConsole() {
 
   return (
     <section
-      className={`st-stories st-stories--${mode}${mode === "scroll" && !userSelected ? " is-locked" : ""}`}
+      className={`st-stories st-stories--${mode}${mode === "scroll" && !userSelected ? " is-locked" : ""}${playing || watchPending ? " is-viewing" : ""}`}
       aria-labelledby="st-title"
       style={{ "--st-lock-p": CHECKPOINT[tallLayout ? "tall" : "wide"] } as React.CSSProperties}
     >
@@ -469,16 +497,16 @@ export function StoriesConsole() {
             {mode !== "reduced" && heading}
 
             {mode !== "static" && (
-              <div ref={screenRef} className={`st-screen${screenUp && loadedItem && userSelected ? " is-up" : ""}`}>
-                {loadedItem && userSelected && screenUp && !playing && (
+              <div ref={screenRef} className={`st-screen${screenUp && loadedItem ? " is-up" : ""}`}>
+                {loadedItem && screenUp && !playing && !watchPending && (
                   <>
-                    <button type="button" className="st-screen__play" onClick={() => setPlaying(true)} aria-label={`Watch ${named(loadedItem)}`}>
+                    <button type="button" className="st-screen__play" onClick={watch} aria-label={`Watch ${named(loadedItem)}`}>
                       <span className="st-screen__glyph" aria-hidden>
                         <svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" /></svg>
                       </span>
                     </button>
                     <div className="st-screen__actions">
-                      <button type="button" className="st-screen__watch" onClick={() => setPlaying(true)}>
+                      <button type="button" className="st-screen__watch" onClick={watch}>
                         {loadedItem.episode ? "Watch episode" : "Watch conversation"}
                       </button>
                       {loadedItem.href && (
@@ -489,7 +517,7 @@ export function StoriesConsole() {
                     </div>
                   </>
                 )}
-                {loadedItem && userSelected && screenUp && playing && (
+                {loadedItem && screenUp && playing && (
                   <div className="st-screen__player">
                     <iframe
                       src={embedUrl(loadedItem)}
@@ -498,7 +526,7 @@ export function StoriesConsole() {
                       allowFullScreen
                       referrerPolicy="strict-origin-when-cross-origin"
                     />
-                    <button type="button" className="st-screen__exit" onClick={() => setPlaying(false)}>
+                    <button type="button" className="st-screen__exit" onClick={stopWatching}>
                       Exit video <span aria-hidden>×</span>
                     </button>
                   </div>

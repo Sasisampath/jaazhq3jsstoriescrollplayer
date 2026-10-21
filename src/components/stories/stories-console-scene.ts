@@ -35,6 +35,10 @@ export type StoriesScene = {
   nudge(index: number): void;
   /** A brief status-light flash: the player acknowledging a choice it already holds. */
   acknowledge(): void;
+  /** Playback viewing: true eases the camera to the one canonical, square-on view of the
+      screen and calls `onArrive` once it is there (scroll no longer moves the camera);
+      false hands the camera back to scroll. */
+  view(on: boolean, onArrive?: () => void): void;
   /** Load an episode. `instant` skips the travel (restore / reduced motion). */
   select(index: number | null, instant?: boolean): void;
   resize(width: number, height: number): void;
@@ -110,6 +114,8 @@ const POSES = {
     archiveUp: [0, 1.1, 0.2, 1.8, 1.16, 0, 0.08, 0],
     player: [0, 0.56, 0.3, 1.02, 0.46, 0, 0.07, 0],
     screen: [0, TOP + SCREEN_H / 2 - 0.08, -0.1, 1.3, 0.92, 0, 0.05, 0],
+    // Watching: screen centred and square-on in its own plane, large, console top still in view.
+    playback: [0, TOP + SCREEN_H / 2 - 0.14, SCREEN_Z, 1.5, 0.98, 0, 0.02, 0],
   },
   tall: {
     full: [0, 0.5, 0, 1.68, 0.8, -0.5, 0.42, 0.1],
@@ -118,6 +124,7 @@ const POSES = {
     archiveRight: [0.5, 0.52, 0.3, 0.6, 0.45, -0.12, 0.12, 0],
     player: [0, 0.56, 0.3, 0.64, 0.42, 0, 0.08, 0],
     screen: [0, TOP + SCREEN_H / 2 - 0.12, -0.1, 1.14, 0.9, 0, 0.05, 0],
+    playback: [0, TOP + SCREEN_H / 2 - 0.1, SCREEN_Z, 1.2, 0.95, 0, 0.02, 0],
   },
 } satisfies Record<StoriesLayout, Record<string, Pose>>;
 
@@ -452,6 +459,12 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
   let loadedReported: number | null = null;
   let raise = 0; // 0 down … 1 up (linear clock; eased when applied)
   let ledPulse = 0; // 1 → 0 after acknowledge()
+  /* Playback viewing: a short eased move from wherever the camera is to POSES.*.playback. */
+  const VIEW_SECONDS = 0.8;
+  let viewing = false;
+  let viewFrom: Pose | null = null;
+  let viewT = 1;
+  let onArrive: (() => void) | null = null;
   const pointer = new THREE.Vector2();
   const pointerDamped = new THREE.Vector2();
   let view: Pose | null = null; // damped camera pose
@@ -623,9 +636,13 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
     ledMat.color.setHex(loadedCase !== null || selected !== null ? PURPLE : 0xb9b5c8);
     if (selected !== null && loadedCase === null) moving = true; // blinking LED while loading
 
-    // Camera: damp toward the scroll-defined pose.
-    const goal = goalPose();
-    if (!view || instant) view = goal.slice() as Pose;
+    // Camera: while watching, a timed ease into the canonical playback view; otherwise damp toward the scroll pose.
+    const goal = viewing ? POSES[layout].playback : goalPose();
+    if (viewing) {
+      viewT = instant ? 1 : Math.min(1, viewT + dt / VIEW_SECONDS);
+      view = viewFrom && viewT < 1 ? mix(viewFrom, goal, ease(viewT)) : (goal.slice() as Pose);
+      if (viewT < 1) moving = true;
+    } else if (!view || instant) view = goal.slice() as Pose;
     else {
       let diff = 0;
       for (let i = 0; i < goal.length; i += 1) {
@@ -638,9 +655,18 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
     applyCamera(view);
 
     // Tiny pointer response on the opening frame only.
-    const idle = layout === "wide" && !reduced ? 1 - span(progress, 0.02, 0.2) : 0;
-    pointerDamped.x = THREE.MathUtils.damp(pointerDamped.x, pointer.x * idle, 4, dt);
-    pointerDamped.y = THREE.MathUtils.damp(pointerDamped.y, pointer.y * idle, 4, dt);
+    const idle = layout === "wide" && !reduced && !viewing ? 1 - span(progress, 0.02, 0.2) : 0;
+    const settle = viewing ? 14 : 4; // straighten the console quickly for playback
+    pointerDamped.x = instant ? pointer.x * idle : THREE.MathUtils.damp(pointerDamped.x, pointer.x * idle, settle, dt);
+    pointerDamped.y = instant ? pointer.y * idle : THREE.MathUtils.damp(pointerDamped.y, pointer.y * idle, settle, dt);
+    if (viewing && viewT >= 1 && Math.abs(pointerDamped.x) < 1e-3 && Math.abs(pointerDamped.y) < 1e-3) {
+      pointerDamped.set(0, 0);
+      if (onArrive) {
+        const done = onArrive;
+        onArrive = null;
+        queueMicrotask(done); // after this frame's render, so the screen rect is final
+      }
+    }
     if (Math.abs(pointerDamped.x - pointer.x * idle) > 1e-4 || Math.abs(pointerDamped.y - pointer.y * idle) > 1e-4) moving = true;
     rig.rotation.y = pointerDamped.x * 0.045;
     rig.rotation.x = pointerDamped.y * 0.012;
@@ -790,6 +816,18 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
       const c = cases[index];
       if (!c || reduced || c.u !== 0 || c.target !== 0) return;
       c.nudge = 0;
+      invalidate();
+    },
+    view(on, arrive) {
+      if (on) {
+        viewing = true;
+        viewFrom = view ? (view.slice() as Pose) : null;
+        viewT = reduced ? 1 : 0;
+        onArrive = arrive ?? null;
+      } else {
+        viewing = false;
+        onArrive = null;
+      }
       invalidate();
     },
     acknowledge() {
