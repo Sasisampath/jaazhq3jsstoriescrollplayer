@@ -44,6 +44,8 @@ type Options = {
   onScreen: (rect: ScreenRect | null) => void;
   /** Fires when a case finishes loading (index) or the player is emptied (null). */
   onLoaded: (index: number | null) => void;
+  /** Stage point just under the hovered case (for a small attached label), or null. */
+  onHoverAnchor: (point: { x: number; y: number } | null) => void;
 };
 
 /* ── Dimensions (world units ≈ metres) ── */
@@ -643,6 +645,21 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
     }
   };
 
+  let lastAnchor = "";
+  const reportHover = () => {
+    const c = hovered !== null ? cases[hovered] : null;
+    let point: { x: number; y: number } | null = null;
+    if (c && c.u === 0 && c.hover > 0.5) {
+      corner.set(0, 0, 0).applyMatrix4(c.group.matrixWorld).project(camera);
+      point = { x: ((corner.x + 1) / 2) * width, y: ((1 - corner.y) / 2) * height };
+    }
+    const key = point ? `${Math.round(point.x)},${Math.round(point.y)}` : "";
+    if (key !== lastAnchor) {
+      lastAnchor = key;
+      options.onHoverAnchor(point);
+    }
+  };
+
   const frame = (now: number) => {
     raf = 0;
     if (disposed) return;
@@ -651,6 +668,7 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
     const moving = step(dt);
     renderer.render(scene, camera);
     reportScreen();
+    reportHover();
     if (moving) invalidate();
     else last = 0;
   };

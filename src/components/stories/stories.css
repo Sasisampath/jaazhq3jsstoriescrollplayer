@@ -172,94 +172,18 @@
   border: 0;
 }
 
-.st-screen__bar {
+/* Playback: one quiet utility control, pinned to the screen's top-right corner. */
+.st-screen__exit {
   position: absolute;
-  top: 100%;
-  left: 0;
   right: 0;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding-top: 10px;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.st-screen__bar a,
-.st-screen__bar button {
-  color: var(--st-ink);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-
-/* ── Hover label: small, top-centre, never a card ── */
-.st-label {
-  position: absolute;
-  top: 18px;
-  left: 50%;
-  z-index: 2;
-  display: grid;
-  justify-items: center;
-  gap: 2px;
-  max-width: min(420px, calc(100% - 32px));
-  margin: 0;
-  padding: 8px 14px 9px;
-  border: 1px solid var(--st-line);
-  border-radius: 10px;
-  background: rgb(255 255 255 / 0.88);
-  backdrop-filter: blur(6px);
-  text-align: center;
-  pointer-events: none;
-  opacity: 0;
-  transform: translate(-50%, -4px);
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-
-.st-label.is-visible {
-  opacity: 1;
-  transform: translate(-50%, 0);
-  transition-delay: 0.12s;
-}
-
-.st-label__num {
-  font-family: var(--st-font-mono);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  color: var(--st-purple);
-}
-
-.st-label__title {
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.35;
-  color: var(--st-ink);
-}
-
-.st-label__guest {
-  font-size: 12px;
-  color: var(--st-muted);
-}
-
-/* Watch / View episode: two quiet actions just under the screen. */
-.st-screen__actions {
-  position: absolute;
-  top: calc(100% + 10px);
-  left: 50%;
-  display: flex;
-  gap: 4px;
-  padding: 4px;
+  bottom: calc(100% + 10px);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 12px;
   border: 1px solid var(--st-line);
   border-radius: 999px;
-  background: rgb(255 255 255 / 0.9);
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-
-.st-screen__actions > * {
-  padding: 6px 14px;
-  border-radius: 999px;
+  background: rgb(255 255 255 / 0.92);
   font-size: 13px;
   font-weight: 500;
   color: var(--st-ink);
@@ -267,9 +191,83 @@
   transition: background 0.2s ease;
 }
 
-.st-screen__actions > *:hover,
-.st-screen__actions > *:focus-visible {
-  background: #f1f0ff;
+.st-screen__exit span {
+  font-size: 16px;
+  line-height: 1;
+  color: var(--st-muted);
+}
+
+.st-screen__exit:hover,
+.st-screen__exit:focus-visible {
+  background: #fff;
+}
+
+/* ── Hover label: a small caption attached just under the pulled-out case ── */
+.st-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  margin: 0;
+  font-family: var(--st-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  color: #4b4f55;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 0.2s ease;
+}
+
+.st-label.is-visible.is-placed {
+  opacity: 1;
+}
+
+/* Selected episode: watch is the primary action, the notes page a quiet link. */
+.st-screen__actions {
+  position: absolute;
+  top: calc(100% + 14px);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.st-screen__watch {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 18px;
+  border-radius: 10px;
+  background: var(--button-dark, #131315);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.st-screen__watch:hover {
+  opacity: 0.9;
+}
+
+.st-screen__notes {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--st-ink);
+  text-decoration: underline;
+  text-decoration-color: rgb(36 36 36 / 0.3);
+  text-underline-offset: 4px;
+  transition: text-decoration-color 0.2s ease;
+}
+
+.st-screen__notes:hover,
+.st-screen__notes:focus-visible {
+  text-decoration-color: currentColor;
 }
 
 /* ── Accessible episode list: hidden until it has keyboard focus ── */

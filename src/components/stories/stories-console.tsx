@@ -68,6 +68,7 @@ export function StoriesConsole() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const headRef = useRef<HTMLElement>(null);
   const screenRef = useRef<HTMLDivElement>(null);
+  const labelRef = useRef<HTMLParagraphElement>(null);
   const sceneRef = useRef<StoriesScene | null>(null);
   const progressRef = useRef(0);
   const tapRef = useRef<{ x: number; y: number; t: number } | null>(null);
@@ -179,6 +180,15 @@ export function StoriesConsole() {
         const scene = await createStoriesScene(canvas, {
           episodes,
           onScreen,
+          onHoverAnchor: (point) => {
+            const el = labelRef.current;
+            if (!el) return;
+            if (point) {
+              el.style.left = `${point.x}px`;
+              el.style.top = `${point.y + 12}px`;
+            }
+            el.classList.toggle("is-placed", point !== null);
+          },
           onLoaded: (index) => {
             loadedRef.current = index;
             setLoaded(index);
@@ -348,10 +358,12 @@ export function StoriesConsole() {
                       </span>
                     </button>
                     <div className="st-screen__actions">
-                      <button type="button" onClick={() => setPlaying(true)}>
-                        Watch
+                      <button type="button" className="st-screen__watch" onClick={() => setPlaying(true)}>
+                        Watch episode
                       </button>
-                      <Link href={episodeHref(loadedEpisode)}>View episode →</Link>
+                      <Link className="st-screen__notes" href={episodeHref(loadedEpisode)}>
+                        Read episode notes →
+                      </Link>
                     </div>
                   </>
                 )}
@@ -364,28 +376,16 @@ export function StoriesConsole() {
                       allowFullScreen
                       referrerPolicy="strict-origin-when-cross-origin"
                     />
-                    <div className="st-screen__bar">
-                      <a href={watchUrl(loadedEpisode)} target="_blank" rel="noopener noreferrer">
-                        Watch on YouTube ↗
-                      </a>
-                      <Link href={episodeHref(loadedEpisode)}>View episode →</Link>
-                      <button type="button" onClick={() => setPlaying(false)}>
-                        Close
-                      </button>
-                    </div>
+                    <button type="button" className="st-screen__exit" onClick={() => setPlaying(false)}>
+                      Exit video <span aria-hidden>×</span>
+                    </button>
                   </div>
                 )}
               </div>
             )}
 
-            <p className={`st-label${label ? " is-visible" : ""}`} aria-hidden>
-              {label && (
-                <>
-                  <span className="st-label__num">EP. {episodeNumber(label)}</span>
-                  <span className="st-label__title">{label.title}</span>
-                  {label.guest && <span className="st-label__guest">{label.guest}</span>}
-                </>
-              )}
+            <p ref={labelRef} className={`st-label${label ? " is-visible" : ""}`} aria-hidden>
+              {label && `EP. ${episodeNumber(label)}${label.guest ? ` · ${label.guest}` : ""}`}
             </p>
 
             {mode === "static" && (
@@ -397,7 +397,7 @@ export function StoriesConsole() {
                     <a href={watchUrl(episodes[active])} target="_blank" rel="noopener noreferrer">
                       Watch {episodeLabel(episodes[active])} on YouTube ↗
                     </a>
-                    <Link href={episodeHref(episodes[active])}>View episode →</Link>
+                    <Link href={episodeHref(episodes[active])}>Read episode notes →</Link>
                   </div>
                 )}
               </div>

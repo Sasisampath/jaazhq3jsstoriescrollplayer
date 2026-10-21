@@ -4,10 +4,13 @@ import { notFound } from "next/navigation";
 import { GridBackground } from "@/components/layout/grid-background";
 import { Header } from "@/components/layout/header";
 import Footer from "@/components/shared/footer";
+import { EpisodeArticle } from "@/components/stories/episode-article";
 import { EpisodeMedia } from "@/components/stories/episode-media";
+import { EpisodeToc } from "@/components/stories/episode-toc";
 import { MoreFromFirstTake } from "@/components/stories/more-from-first-take";
 import "@/components/stories/episode.css";
 import {
+  SHOW_NAME,
   SHOW_TITLE,
   durationLabel,
   episodeHref,
@@ -35,7 +38,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!episode) return {};
   return pageSeo({
     title: `${episode.title} | ${SHOW_TITLE}`,
-    description: episode.description,
+    description: episode.description ?? episode.article?.dek,
     path: episodeHref(episode),
     image: episode.thumbnail,
   });
@@ -46,20 +49,49 @@ export default async function EpisodePage({ params }: Props) {
   if (!episode) notFound();
   const { previous, next } = neighbours(episode);
 
+  const { article } = episode;
+  const toc = article?.sections.map((section) => ({ id: section.id, label: section.navLabel ?? section.heading ?? section.id })) ?? [];
+
+  const pager = (
+    <nav className="ep-pager" aria-label="More episodes">
+      {previous ? (
+        <Link className="ep-pager__link" href={episodeHref(previous)} rel="prev">
+          <span className="ep-pager__dir">← Previous</span>
+          <span className="ep-pager__title">
+            EP. {episodeNumber(previous)} · {previous.title}
+          </span>
+        </Link>
+      ) : (
+        <span />
+      )}
+      {next ? (
+        <Link className="ep-pager__link ep-pager__link--next" href={episodeHref(next)} rel="next">
+          <span className="ep-pager__dir">Next →</span>
+          <span className="ep-pager__title">
+            EP. {episodeNumber(next)} · {next.title}
+          </span>
+        </Link>
+      ) : (
+        <span />
+      )}
+    </nav>
+  );
+
   return (
     <GridBackground>
       <Header />
       <main className="ep-page flex-1">
-        <article className="page-section ep-article" aria-labelledby="ep-title">
-          <header className="ep-head">
+        <article aria-labelledby="ep-title">
+          <header className="page-section ep-hero">
             <p className="ep-eyebrow">
-              <Link href="/stories">{SHOW_TITLE}</Link>
+              <Link href="/stories">{SHOW_NAME}</Link>
               <span aria-hidden> · </span>
               <span>{episodeLabel(episode).toUpperCase()}</span>
             </p>
             <h1 id="ep-title" className="ep-title">
               {episode.title}
             </h1>
+            {article?.dek && <p className="ep-dek">{article.dek}</p>}
             <p className="ep-meta">
               {episode.guest && <span>{episode.guest}</span>}
               <span>
@@ -68,39 +100,30 @@ export default async function EpisodePage({ params }: Props) {
             </p>
           </header>
 
-          <EpisodeMedia episode={episode} />
+          <div className="page-section ep-media-wrap">
+            <EpisodeMedia episode={episode} />
+          </div>
 
-          {episode.description && (
-            <section className="ep-about" aria-labelledby="ep-about-title">
-              <h2 id="ep-about-title" className="ep-section-title">
-                About this episode
-              </h2>
-              <p>{episode.description}</p>
-            </section>
+          {article ? (
+            <div className="page-section ep-layout">
+              <EpisodeToc items={toc} articleId="episode-notes" />
+              <div className="ep-column">
+                <div id="episode-notes" className="ep-prose">
+                  <EpisodeArticle episode={episode} />
+                </div>
+                {pager}
+              </div>
+            </div>
+          ) : (
+            <div className="page-section ep-solo">
+              {episode.description && (
+                <div className="ep-prose">
+                  <p>{episode.description}</p>
+                </div>
+              )}
+              {pager}
+            </div>
           )}
-
-          <nav className="ep-pager" aria-label="Episodes">
-            {previous ? (
-              <Link className="ep-pager__link" href={episodeHref(previous)} rel="prev">
-                <span className="ep-pager__dir">← Previous episode</span>
-                <span className="ep-pager__title">
-                  EP. {episodeNumber(previous)} · {previous.title}
-                </span>
-              </Link>
-            ) : (
-              <span />
-            )}
-            {next ? (
-              <Link className="ep-pager__link ep-pager__link--next" href={episodeHref(next)} rel="next">
-                <span className="ep-pager__dir">Next episode →</span>
-                <span className="ep-pager__title">
-                  EP. {episodeNumber(next)} · {next.title}
-                </span>
-              </Link>
-            ) : (
-              <span />
-            )}
-          </nav>
         </article>
 
         <MoreFromFirstTake current={episode.slug} />

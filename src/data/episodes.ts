@@ -4,9 +4,43 @@
    console screen, the accessible list, the /stories/[slug] page, its metadata,
    previous/next and "More from First Take" are all generated from it. */
 
+import { whenHowToHireYourFirstCro } from "./articles/when-how-to-hire-your-first-cro";
+
 export const SHOW_NAME = "FIRST TAKE";
 export const SHOW_BYLINE = "BY JAZZHQ";
 export const SHOW_TITLE = `${SHOW_NAME} — ${SHOW_BYLINE}`;
+
+/* Editorial copy for an episode page. Inline text supports **bold** and *italic*.
+   Only add copy that has actually been written for the episode. */
+export type ArticleBlock =
+  | { type: "paragraph"; text: string }
+  /** A short spoken line, set in italics. */
+  | { type: "quote"; text: string }
+  /** A key line pulled out large. */
+  | { type: "pullquote"; text: string }
+  | { type: "list"; items: string[] }
+  /** A formula or one-line idea, set apart. */
+  | { type: "callout"; text: string }
+  | { type: "figure"; src: string; alt: string; width: number; height: number }
+  /** "From the podcast": jumps the episode player to a timestamp ("mm:ss"). */
+  | { type: "podcast"; text: string; title?: string; at: string }
+  /** Closing block that points back to the full episode. */
+  | { type: "watch"; title: string; text: string };
+
+export type ArticleSection = {
+  id: string;
+  /** Visible heading; leave out for an untitled opening section. */
+  heading?: string;
+  /** Table of contents label; defaults to the heading. */
+  navLabel?: string;
+  blocks: ArticleBlock[];
+};
+
+export type EpisodeArticle = {
+  /** Standfirst shown under the title. */
+  dek?: string;
+  sections: ArticleSection[];
+};
 
 export type Episode = {
   episode: number;
@@ -19,6 +53,8 @@ export type Episode = {
   thumbnail: string;
   /** Only add a description that has actually been supplied. */
   description?: string;
+  /** Long-form episode notes for /stories/[slug]; the table of contents is built from its sections. */
+  article?: EpisodeArticle;
 };
 
 const ALL: Episode[] = [
@@ -39,6 +75,7 @@ const ALL: Episode[] = [
     duration: "36:14",
     youtubeId: "t4Hfn3ZZ6Oo",
     thumbnail: "/podcasts/when-how-to-hire-your-first-cro.jpg",
+    article: whenHowToHireYourFirstCro,
   },
   {
     episode: 3,
@@ -62,10 +99,16 @@ const ALL: Episode[] = [
 /** Always in episode order, whatever order the entries above are written in. */
 export const episodes: Episode[] = [...ALL].sort((a, b) => a.episode - b.episode);
 
-export const watchUrl = (e: Episode) => `https://www.youtube.com/watch?v=${e.youtubeId}`;
+/** "14:03" → 843, "1:02:05" → 3725. */
+export function toSeconds(timestamp: string) {
+  return timestamp.split(":").map(Number).reduce((total, part) => total * 60 + (part || 0), 0);
+}
 
-export const embedUrl = (e: Episode, autoplay = true) =>
-  `https://www.youtube-nocookie.com/embed/${e.youtubeId}?rel=0&playsinline=1${autoplay ? "&autoplay=1" : ""}`;
+export const watchUrl = (e: Episode, start = 0) =>
+  `https://www.youtube.com/watch?v=${e.youtubeId}${start ? `&t=${start}s` : ""}`;
+
+export const embedUrl = (e: Episode, autoplay = true, start = 0) =>
+  `https://www.youtube-nocookie.com/embed/${e.youtubeId}?rel=0&playsinline=1${autoplay ? "&autoplay=1" : ""}${start ? `&start=${start}` : ""}`;
 
 export const episodeHref = (e: Episode) => `/stories/${e.slug}`;
 
