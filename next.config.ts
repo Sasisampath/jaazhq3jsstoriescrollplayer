@@ -16,8 +16,7 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
-      // This repository only contains the About Us page.
-      { source: "/", destination: "/about-us", permanent: false },
+      // Stories is the home of this project (see src/app/page.tsx); these keep old About Us links working.
       { source: "/about", destination: "/about-us", permanent: true },
       { source: "/our-story", destination: "/about-us", permanent: true },
     ];
