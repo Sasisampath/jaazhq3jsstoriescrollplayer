@@ -35,8 +35,40 @@
 
 /* The tall track is only scroll distance; the stage is sticky inside it. */
 .st-track {
+  --st-track-h: 440vh;
   position: relative;
-  height: 440vh;
+  height: var(--st-track-h);
+}
+
+/* Measures the full track while it is shortened by the lock. Fixed, so it can be
+   measured without adding scroll height to the page. */
+.st-track__probe {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: var(--st-track-h);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Until an episode is chosen the page ends at the FIRST TAKE shelf: the track only
+   reaches the checkpoint (same progress the scene is clamped to). Scrolling works
+   normally; there is simply no further to go yet. */
+.st-stories--scroll.is-locked .st-track {
+  /* --st-lock-p is set by the component from its CHECKPOINT. */
+  height: calc((var(--st-track-h) - (100svh - var(--st-header-h))) * var(--st-lock-p, 0.3) + (100svh - var(--st-header-h)));
+}
+
+/* The footer stays in the document (and the accessibility tree) but sits out of
+   view until the journey is unlocked. */
+.screen-grid-bg:has(.st-stories--scroll.is-locked) .site-footer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .st-sticky {
@@ -225,6 +257,44 @@
   opacity: 1;
 }
 
+/* ── Shelf captions: small and attached under each row of cases ── */
+.st-shelf {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 0.35s ease;
+}
+
+.st-shelf.is-shown.is-placed {
+  opacity: 1;
+}
+
+.st-shelf__name {
+  font-family: var(--st-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: #3a3d42;
+}
+
+.st-shelf__hint {
+  font-size: 13px;
+  color: var(--st-muted);
+  transition: opacity 0.5s ease;
+}
+
+.st-shelf__hint.is-done {
+  opacity: 0;
+}
+
 /* Selected episode: watch is the primary action, the notes page a quiet link. */
 .st-screen__actions {
   position: absolute;
@@ -277,6 +347,11 @@
   bottom: 16px;
   z-index: 4;
   transform: translateX(-50%);
+}
+
+.st-episodes:focus-within {
+  display: flex;
+  gap: 8px;
 }
 
 .st-episodes ol {
@@ -419,8 +494,7 @@
 
 @media (max-width: 767px) {
   .st-track {
-    height: 520vh;
-    height: 520svh;
+    --st-track-h: 520svh;
   }
 }
 

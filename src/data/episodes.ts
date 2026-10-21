@@ -104,10 +104,12 @@ export function toSeconds(timestamp: string) {
   return timestamp.split(":").map(Number).reduce((total, part) => total * 60 + (part || 0), 0);
 }
 
-export const watchUrl = (e: Episode, start = 0) =>
+type Video = Pick<Episode, "youtubeId">;
+
+export const watchUrl = (e: Video, start = 0) =>
   `https://www.youtube.com/watch?v=${e.youtubeId}${start ? `&t=${start}s` : ""}`;
 
-export const embedUrl = (e: Episode, autoplay = true, start = 0) =>
+export const embedUrl = (e: Video, autoplay = true, start = 0) =>
   `https://www.youtube-nocookie.com/embed/${e.youtubeId}?rel=0&playsinline=1${autoplay ? "&autoplay=1" : ""}${start ? `&start=${start}` : ""}`;
 
 export const episodeHref = (e: Episode) => `/stories/${e.slug}`;

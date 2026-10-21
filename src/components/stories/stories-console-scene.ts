@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { SHOW_NAME, type Episode } from "@/data/episodes";
+import { SHOW_NAME } from "@/data/episodes";
+import type { ConsoleMedia } from "@/data/media";
 import { CASE_H, CASE_T, CASE_W, createCaseShared, createEpisodeCase, drawContained } from "./episode-case";
 
 /* The FIRST TAKE console: one light-oak media console with a case archive in
@@ -30,6 +31,10 @@ export type StoriesScene = {
       (px), a near miss picks the closest case — for fingers on thin spines. */
   pick(x: number, y: number, radius?: number): number | null;
   setHover(index: number | null): void;
+  /** One small "pull me" nudge on a stored case (discoverability hint). */
+  nudge(index: number): void;
+  /** A brief status-light flash: the player acknowledging a choice it already holds. */
+  acknowledge(): void;
   /** Load an episode. `instant` skips the travel (restore / reduced motion). */
   select(index: number | null, instant?: boolean): void;
   resize(width: number, height: number): void;
@@ -38,7 +43,7 @@ export type StoriesScene = {
 };
 
 type Options = {
-  episodes: Episode[];
+  items: ConsoleMedia[];
   onContextLost: () => void;
   /** The screen's image area in stage pixels, or null while it is down / off-stage. */
   onScreen: (rect: ScreenRect | null) => void;
@@ -46,6 +51,8 @@ type Options = {
   onLoaded: (index: number | null) => void;
   /** Stage point just under the hovered case (for a small attached label), or null. */
   onHoverAnchor: (point: { x: number; y: number } | null) => void;
+  /** Stage points just under each shelf's row of cases (null when off-stage), for the shelf captions. */
+  onShelfAnchors: (anchors: { left: { x: number; y: number } | null; right: { x: number; y: number } | null }) => void;
 };
 
 /* ── Dimensions (world units ≈ metres) ── */
@@ -97,6 +104,8 @@ const POSES = {
   wide: {
     full: [0, 0.62, 0, 2.6, 1.3, -0.4, 0.3, 0.1],
     fullUp: [0, 1.12, -0.1, 2.6, 1.85, -0.36, 0.22, 0.13],
+    // First stop: the FIRST TAKE shelf on the right, with the player's edge for context.
+    archiveRight: [0.66, 0.56, 0.3, 0.92, 0.48, -0.14, 0.1, 0],
     archive: [0, 0.62, 0.3, 1.66, 0.62, 0, 0.1, 0],
     archiveUp: [0, 1.1, 0.2, 1.8, 1.16, 0, 0.08, 0],
     player: [0, 0.56, 0.3, 1.02, 0.46, 0, 0.07, 0],
@@ -231,20 +240,22 @@ async function resolveFonts() {
   return { display, mono };
 }
 
-/* ── Case layout: spine-out, in episode order, reading left → right.
-   The first half fills the left bay against the player, the rest the right
-   bay; an oak bookend closes each row. Each bay holds ~17 cases. ── */
+/* ── Case layout: spine-out, each collection on its own shelf, in data order
+   reading left → right. FIRST TAKE starts against the player on the right;
+   the other conversations end against it on the left. An oak bookend closes
+   each row. Each bay holds ~13 cases. ── */
 
 type Slot = { x: number; z: number; bay: -1 | 1; k: number };
 
-function archiveSlots(count: number): Slot[] {
-  const left = Math.ceil(count / 2);
+function archiveSlots(items: ConsoleMedia[]): Slot[] {
   const inner = BAY_IN + SLAB + 0.02;
-  return Array.from({ length: count }, (_, i) => {
-    const bay = i < left ? -1 : 1;
-    const k = bay < 0 ? i : i - left;
-    const n = bay < 0 ? left : count - left;
-    const x = bay < 0 ? -inner - (n - 1 - k) * CASE_PITCH - CASE_T / 2 : inner + k * CASE_PITCH + CASE_T / 2;
+  const left = items.filter((item) => item.side === "left").length;
+  let l = 0;
+  let r = 0;
+  return items.map((item) => {
+    const bay = item.side === "left" ? -1 : 1;
+    const k = bay < 0 ? l++ : r++;
+    const x = bay < 0 ? -inner - (left - 1 - k) * CASE_PITCH - CASE_T / 2 : inner + k * CASE_PITCH + CASE_T / 2;
     return { x, z: D / 2 - 0.045 - CASE_W / 2, bay, k };
   });
 }
@@ -260,11 +271,12 @@ type Case = {
   dwell: number;
   spread: number; // neighbours part away from a hovered case
   vel: Record<"hover" | "feature" | "spread", number>; // spring velocities
+  nudge: number; // seconds into the one-off "pull me" hint, -1 when idle
   image: HTMLImageElement | null;
 };
 
 export async function createStoriesScene(canvas: HTMLCanvasElement, options: Options): Promise<StoriesScene> {
-  const [fonts, images] = await Promise.all([resolveFonts(), Promise.all(options.episodes.map((e) => loadImage(e.thumbnail)))]);
+  const [fonts, images] = await Promise.all([resolveFonts(), Promise.all(options.items.map((item) => loadImage(item.thumbnail)))]);
 
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "high-performance" });
   renderer.setClearColor(0x000000, 0);
@@ -398,11 +410,11 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
   screen.add(status);
 
   /* ── Cases (one reusable builder, driven by the episode data) ── */
-  const slots = archiveSlots(options.episodes.length);
+  const slots = archiveSlots(options.items);
   const caseShared = createCaseShared(track);
-  const cases: Case[] = options.episodes.map((episode, i) => {
+  const cases: Case[] = options.items.map((item, i) => {
     const slot = slots[i];
-    const { group, pickMesh } = createEpisodeCase({ episode, index: i, image: images[i], fonts, shared: caseShared, texture: tex, track });
+    const { group, pickMesh } = createEpisodeCase({ item, index: i, image: images[i], fonts, shared: caseShared, texture: tex, track });
     rig.add(group);
     return {
       group,
@@ -415,6 +427,7 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
       dwell: 0,
       spread: 0,
       vel: { hover: 0, feature: 0, spread: 0 },
+      nudge: -1,
       image: images[i],
     };
   });
@@ -438,6 +451,7 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
   let hovered: number | null = null;
   let loadedReported: number | null = null;
   let raise = 0; // 0 down … 1 up (linear clock; eased when applied)
+  let ledPulse = 0; // 1 → 0 after acknowledge()
   const pointer = new THREE.Vector2();
   const pointerDamped = new THREE.Vector2();
   let view: Pose | null = null; // damped camera pose
@@ -462,14 +476,17 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
       const P = POSES.wide;
       const screenPose = mix(P.player, P.screen, up);
       // Once the screen is up it is part of "the whole object", so the wide views make room for it.
-      let pose = mix(mix(P.full, P.fullUp, up), mix(P.archive, P.archiveUp, up), span(p, 0.06, 0.32));
-      pose = mix(pose, P.player, span(p, 0.5, 0.64));
-      return mix(pose, screenPose, span(p, 0.7, 0.88));
+      // full → FIRST TAKE shelf → both shelves → player → screen
+      let pose = mix(mix(P.full, P.fullUp, up), P.archiveRight, span(p, 0.06, 0.26));
+      pose = mix(pose, mix(P.archive, P.archiveUp, up), span(p, 0.38, 0.48));
+      pose = mix(pose, P.player, span(p, 0.56, 0.68));
+      return mix(pose, screenPose, span(p, 0.74, 0.9));
     }
     const P = POSES.tall;
     const screenPose = mix(P.player, P.screen, up);
-    let pose = mix(mix(P.full, P.fullUp, up), P.archiveLeft, span(p, 0.05, 0.24));
-    pose = mix(pose, P.archiveRight, span(p, 0.34, 0.44));
+    // full → FIRST TAKE (right) → more conversations (left) → player → screen
+    let pose = mix(mix(P.full, P.fullUp, up), P.archiveRight, span(p, 0.05, 0.24));
+    pose = mix(pose, P.archiveLeft, span(p, 0.34, 0.44));
     pose = mix(pose, P.player, span(p, 0.54, 0.64));
     return mix(pose, screenPose, span(p, 0.7, 0.88));
   };
@@ -501,10 +518,12 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
     // In-bay preview pose: it slides straight out first, then turns its cover to the viewer.
     const slide = ease(clamp01(h / 0.6));
     const face = ease(clamp01((h - 0.3) / 0.7));
+    // One-off hint: lifts and leans out a few millimetres, pauses, settles back (the hover proper stays the visitor's).
+    const n = c.nudge < 0 ? 0 : c.nudge < 0.45 ? ease(c.nudge / 0.45) : c.nudge < 0.95 ? 1 : 1 - ease(Math.min(1, (c.nudge - 0.95) / 0.6));
     const bx = slot.x + c.spread * 0.034;
-    const by = BAY_FLOOR + slide * 0.012 + f * 0.03;
-    const bz = slot.z + slide * 0.3 + f * 0.07;
-    const bry = STORED_Y * (1 - 0.8 * face - 0.2 * f);
+    const by = BAY_FLOOR + slide * 0.012 + f * 0.03 + n * 0.013;
+    const bz = slot.z + slide * 0.3 + f * 0.07 + n * 0.02;
+    const bry = STORED_Y * (1 - 0.8 * face - 0.2 * f) - n * 0.07;
     // Selection path.
     const out = span(u, 0, 0.22);
     const turn = span(u, 0.08, 0.3);
@@ -525,14 +544,21 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
     const instant = reduced;
 
     // A case may only move into the player once the previous one is out of the slot.
-    const busy = (self: Case) => cases.some((o) => o !== self && o.u > 0.72);
+    // One case in flight at a time: the one leaving the player goes all the way home
+    // before the newly chosen case sets off, so they never cross mid-air.
+    const busy = (self: Case) => cases.some((o) => o !== self && o.u > 0.001);
     for (const c of cases) {
-      const goal = c.target === 1 && busy(c) ? Math.min(c.u, 0.72) : c.target;
+      const goal = c.target === 1 && busy(c) ? c.u : c.target;
       if (c.u !== goal) {
-        c.u = instant ? goal : goal > c.u ? Math.min(goal, c.u + dt / LOAD_SECONDS) : Math.max(goal, c.u - dt / (LOAD_SECONDS * 0.8));
+        c.u = instant ? goal : goal > c.u ? Math.min(goal, c.u + dt / LOAD_SECONDS) : Math.max(goal, c.u - dt / (LOAD_SECONDS * 0.65));
         moving = true;
       }
       const isHovered = cases.indexOf(c) === hovered && c.u === 0 && c.target === 0;
+      if (c.nudge >= 0) {
+        c.nudge = isHovered || c.target !== 0 ? -1 : c.nudge + dt;
+        if (c.nudge > 1.55) c.nudge = -1;
+        moving = true;
+      }
       c.dwell = isHovered ? c.dwell + dt : 0;
       if (isHovered && c.dwell < FEATURE_AFTER + 0.05) moving = true; // keep ticking until the dwell completes
       const other = hovered !== null ? cases[hovered] : null;
@@ -588,7 +614,12 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
     const power = clamp01((raise - 0.82) / 0.18);
     imageMat.color.setScalar(lerp(0.05, 1, power));
     statusMat.opacity = power * 0.9;
-    ledMat.emissiveIntensity = loadedCase !== null ? 1.4 : selected !== null ? 0.5 + 0.5 * Math.sin(performance.now() / 160) : 0;
+    if (ledPulse > 0) {
+      ledPulse = Math.max(0, ledPulse - dt / 0.9);
+      moving = true;
+    }
+    const flash = Math.sin(Math.PI * Math.min(1, (1 - ledPulse) * 2)) * (ledPulse > 0 ? 1 : 0);
+    ledMat.emissiveIntensity = (loadedCase !== null ? 1.4 : selected !== null ? 0.5 + 0.5 * Math.sin(performance.now() / 160) : 0) + flash * 2.6;
     ledMat.color.setHex(loadedCase !== null || selected !== null ? PURPLE : 0xb9b5c8);
     if (selected !== null && loadedCase === null) moving = true; // blinking LED while loading
 
@@ -645,6 +676,26 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
     }
   };
 
+  const shelfPoint = (bay: -1 | 1) => {
+    const row = cases.filter((c) => c.slot.bay === bay);
+    if (!row.length) return null;
+    const x = row.reduce((sum, c) => sum + c.slot.x, 0) / row.length;
+    corner.set(x, LEG_H - 0.012, D / 2).applyMatrix4(rig.matrixWorld).project(camera);
+    const px = ((corner.x + 1) / 2) * width;
+    const py = ((1 - corner.y) / 2) * height;
+    return px > 0 && px < width && py > 0 && py < height ? { x: px, y: py } : null;
+  };
+  let lastShelves = "";
+  const reportShelves = () => {
+    const left = shelfPoint(-1);
+    const right = shelfPoint(1);
+    const key = [left, right].map((p) => (p ? `${Math.round(p.x)},${Math.round(p.y)}` : "-")).join("|");
+    if (key !== lastShelves) {
+      lastShelves = key;
+      options.onShelfAnchors({ left, right });
+    }
+  };
+
   let lastAnchor = "";
   const reportHover = () => {
     const c = hovered !== null ? cases[hovered] : null;
@@ -669,6 +720,7 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
     renderer.render(scene, camera);
     reportScreen();
     reportHover();
+    reportShelves();
     if (moving) invalidate();
     else last = 0;
   };
@@ -732,6 +784,17 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
     setHover(index) {
       if (index === hovered) return;
       hovered = index;
+      invalidate();
+    },
+    nudge(index) {
+      const c = cases[index];
+      if (!c || reduced || c.u !== 0 || c.target !== 0) return;
+      c.nudge = 0;
+      invalidate();
+    },
+    acknowledge() {
+      if (reduced) return;
+      ledPulse = 1;
       invalidate();
     },
     select(index, instant = false) {

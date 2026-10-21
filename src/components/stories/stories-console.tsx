@@ -2,29 +2,66 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import {
-  SHOW_NAME,
-  SHOW_TITLE,
-  embedUrl,
-  episodeHref,
-  episodeLabel,
-  episodeNumber,
-  episodes,
-  watchUrl,
-} from "@/data/episodes";
+import { SHOW_TITLE, embedUrl, watchUrl } from "@/data/episodes";
+import { COLLECTION_LABEL, consoleMedia, type ConsoleMedia } from "@/data/media";
 import type { ScreenRect, StoriesScene } from "./stories-console-scene";
 import { markNotesFromConsole } from "./back-to-first-take";
 
 /* FIRST TAKE — BY JAZZHQ: one console, driven by scroll.
    The tall track is only a scroll distance; the stage stays sticky inside it and
-   scroll progress alone decides the camera (full console → archive → player →
-   screen). Choosing an episode is the one thing the visitor "does": the case
-   travels into the player and the screen rises. Every episode also exists as a
-   real button for keyboards and screen readers. */
+   scroll progress alone decides the camera (full console → FIRST TAKE shelf →
+   both shelves → player → screen). Choosing a case is the one thing the visitor
+   "does": it travels into the player and the screen rises. The first time the
+   FIRST TAKE shelf is in focus, one case nudges forward and a small caption
+   says it can be previewed; both go away once the visitor has tried it. Every
+   case also exists as a real button for keyboards and screen readers. */
 
 const REDUCED_QUERY = "(prefers-reduced-motion: reduce)";
 const TALL_BELOW = 0.85; // stage aspect under which the portrait camera path is used
 const STORAGE_KEY = "jazzhq-stories-episode";
+const NUDGED_KEY = "first-take:nudged";
+const TOUCH_QUERY = "(hover: none), (pointer: coarse)";
+
+const media = consoleMedia;
+const firstTake = media.filter((m) => m.collection === "first-take");
+const moreConversations = media.filter((m) => m.collection === "more-conversations");
+/** The case that nudges: the outermost FIRST TAKE case, where it's easiest to notice. */
+const NUDGE_INDEX = media.indexOf(firstTake[firstTake.length - 1]);
+/** Already in the player when the page opens, so the console reads as a working player.
+    This is a demo state, not the visitor's choice. */
+const DEFAULT_INDEX = Math.max(0, media.findIndex((m) => m.episode?.episode === 3));
+
+/* Until the visitor deliberately selects a case, the journey holds at the
+   FIRST TAKE shelf: the scroll track is shortened (in CSS) so the page simply
+   ends there, and scene progress is clamped to the same point. Selecting a case
+   restores the full track and the rest of the journey (screen, footer). */
+const CHECKPOINT = { wide: 0.3, tall: 0.28 } as const;
+
+type Guide = "preview" | "select" | "done";
+
+/* Scroll ranges in which each shelf caption shows (see the camera path in the scene). */
+const SHELF_RANGES = {
+  wide: { right: [0.16, 0.55], left: [0.42, 0.55], nudgeAt: 0.25 },
+  tall: { right: [0.16, 0.36], left: [0.38, 0.52], nudgeAt: 0.2 },
+} as const;
+
+function flag(key: string) {
+  try {
+    return window.sessionStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setFlag(key: string) {
+  try {
+    window.sessionStorage.setItem(key, "1");
+  } catch {
+    // Storage blocked: the hint may show again on the next visit.
+  }
+}
+
+const inRange = (p: number, [a, b]: readonly [number, number]) => p >= a && p <= b;
 
 type Hint = "explore" | "choose" | "screen" | null;
 
@@ -47,7 +84,7 @@ function readSaved(): number | null {
   try {
     const raw = window.sessionStorage.getItem(STORAGE_KEY);
     const index = raw === null ? NaN : Number(raw);
-    return Number.isInteger(index) && index >= 0 && index < episodes.length ? index : null;
+    return Number.isInteger(index) && index >= 0 && index < media.length ? index : null;
   } catch {
     return null;
   }
@@ -70,6 +107,11 @@ export function StoriesConsole() {
   const headRef = useRef<HTMLElement>(null);
   const screenRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLParagraphElement>(null);
+  const rightShelfRef = useRef<HTMLDivElement>(null);
+  const leftShelfRef = useRef<HTMLDivElement>(null);
+  const probeRef = useRef<HTMLDivElement>(null);
+  const guideRef = useRef<Guide>("preview");
+  const userSelectedRef = useRef(false);
   const sceneRef = useRef<StoriesScene | null>(null);
   const progressRef = useRef(0);
   const tapRef = useRef<{ x: number; y: number; t: number } | null>(null);
@@ -85,8 +127,23 @@ export function StoriesConsole() {
   const [screenUp, setScreenUp] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [hint, setHint] = useState<Hint>("explore");
-  const [tall, setTall] = useState(false);
   const [hovered, setHovered] = useState<number | null>(null);
+  const [guide, setGuide] = useState<Guide>("preview");
+  const [userSelected, setUserSelected] = useState(false);
+  const [tallLayout, setTallLayout] = useState(false);
+  const touch = useSyncExternalStore(
+    () => () => {},
+    () => window.matchMedia(TOUCH_QUERY).matches,
+    () => false,
+  );
+
+  // Shelf guidance: "Hover/Tap a case to preview" → after a preview "Select an episode to continue" → gone once chosen.
+  const advanceGuide = useCallback((next: Guide) => {
+    const order: Guide[] = ["preview", "select", "done"];
+    if (order.indexOf(next) <= order.indexOf(guideRef.current)) return;
+    guideRef.current = next;
+    setGuide(next);
+  }, []);
 
   const selectedRef = useRef(selected);
   const loadedRef = useRef(loaded);
@@ -97,12 +154,23 @@ export function StoriesConsole() {
 
   const mode = webgl === "failed" ? "static" : reduced ? "reduced" : "scroll";
 
-  const choose = useCallback((index: number) => {
-    setPlaying(false);
-    setSelected(index);
-    save(index);
-    sceneRef.current?.select(index);
-  }, []);
+  // Only a deliberate click, tap or key press lands here; it unlocks the rest of the journey.
+  const choose = useCallback(
+    (index: number) => {
+      advanceGuide("done");
+      userSelectedRef.current = true;
+      setUserSelected(true);
+      setPlaying(false);
+      save(index);
+      if (index === selectedRef.current) {
+        sceneRef.current?.acknowledge(); // already in the player: just a status-light nod
+        return;
+      }
+      setSelected(index);
+      sceneRef.current?.select(index);
+    },
+    [advanceGuide],
+  );
 
   useEffect(() => {
     const track = trackRef.current;
@@ -115,13 +183,16 @@ export function StoriesConsole() {
     let started = false;
     let raf = 0;
     let lastHint: Hint = "explore";
+    let nudged = flag(NUDGED_KEY);
+    let nudgeTimer = 0;
 
     const updateHint = (p: number, isTall: boolean) => {
       let next: Hint = null;
       if (reduced) next = null;
       else if (p < 0.04) next = "explore";
+      else if (!userSelectedRef.current) next = isTall ? "choose" : null;
       else if (loadedRef.current !== null) next = p < 0.66 ? "screen" : null;
-      else if (selectedRef.current === null && p > 0.2 && p < (isTall ? 0.52 : 0.5)) next = "choose";
+      else if (selectedRef.current === null && isTall && p > 0.16 && p < 0.52) next = "choose";
       if (next !== lastHint) {
         lastHint = next;
         setHint(next);
@@ -130,9 +201,13 @@ export function StoriesConsole() {
 
     const sync = () => {
       raf = 0;
-      const range = track.offsetHeight - sticky.offsetHeight;
+      // Progress is always measured against the full track, so it carries straight on when the lock lifts.
+      const fullHeight = probeRef.current?.offsetHeight || track.offsetHeight;
+      const range = fullHeight - sticky.offsetHeight;
       const top = parseFloat(getComputedStyle(sticky).top) || 0;
-      const p = range > 0 ? Math.min(1, Math.max(0, (top - track.getBoundingClientRect().top) / range)) : 0;
+      const isTallNow = stage.clientWidth / Math.max(1, stage.clientHeight) < TALL_BELOW;
+      const cap = !reduced && !userSelectedRef.current ? CHECKPOINT[isTallNow ? "tall" : "wide"] : 1;
+      const p = range > 0 ? Math.min(cap, Math.max(0, (top - track.getBoundingClientRect().top) / range)) : 0;
       progressRef.current = p;
       sceneRef.current?.setProgress(p);
       const head = headRef.current;
@@ -141,7 +216,18 @@ export function StoriesConsole() {
         head.style.opacity = String(1 - fade);
         head.style.transform = `translate3d(0, ${-fade * 48}px, 0)`;
       }
-      updateHint(p, stage.clientWidth / Math.max(1, stage.clientHeight) < TALL_BELOW);
+      const isTall = stage.clientWidth / Math.max(1, stage.clientHeight) < TALL_BELOW;
+      updateHint(p, isTall);
+      const ranges = SHELF_RANGES[isTall ? "tall" : "wide"];
+      const showShelves = !reduced;
+      rightShelfRef.current?.classList.toggle("is-shown", showShelves && inRange(p, ranges.right));
+      leftShelfRef.current?.classList.toggle("is-shown", showShelves && inRange(p, ranges.left));
+      // The first arrival at the FIRST TAKE shelf: one case leans out once, after a beat.
+      if (!reduced && !nudged && sceneRef.current && p >= ranges.nudgeAt && p <= ranges.right[1]) {
+        nudged = true;
+        setFlag(NUDGED_KEY);
+        if (guideRef.current === "preview") nudgeTimer = window.setTimeout(() => sceneRef.current?.nudge(NUDGE_INDEX), 900);
+      }
     };
     const requestSync = () => {
       if (!raf) raf = requestAnimationFrame(sync);
@@ -150,7 +236,7 @@ export function StoriesConsole() {
     const fit = () => {
       const { width, height } = stage.getBoundingClientRect();
       const isTall = width / Math.max(1, height) < TALL_BELOW;
-      setTall(isTall);
+      setTallLayout(isTall);
       const scene = sceneRef.current;
       if (!scene) return;
       scene.setLayout(isTall ? "tall" : "wide");
@@ -179,8 +265,21 @@ export function StoriesConsole() {
       try {
         const { createStoriesScene } = await import("./stories-console-scene");
         const scene = await createStoriesScene(canvas, {
-          episodes,
+          items: media,
           onScreen,
+          onShelfAnchors: ({ left, right }) => {
+            for (const [el, point] of [
+              [leftShelfRef.current, left],
+              [rightShelfRef.current, right],
+            ] as const) {
+              if (!el) continue;
+              if (point) {
+                el.style.left = `${point.x}px`;
+                el.style.top = `${point.y + 10}px`;
+              }
+              el.classList.toggle("is-placed", point !== null);
+            }
+          },
           onHoverAnchor: (point) => {
             const el = labelRef.current;
             if (!el) return;
@@ -209,12 +308,19 @@ export function StoriesConsole() {
         scene.setReduced(reduced);
         fit();
         sync();
-        // Restore the episode chosen earlier this session without replaying the travel.
-        const restore = selectedRef.current ?? readSaved();
+        // A choice made earlier this session is restored (and keeps the journey unlocked);
+        // otherwise EP03 sits in the player as the demo state.
+        const restore = userSelectedRef.current ? selectedRef.current : readSaved();
         if (restore !== null) {
-          setSelected(restore);
-          scene.select(restore, true);
+          userSelectedRef.current = true;
+          setUserSelected(true);
+          guideRef.current = "done";
+          setGuide("done");
         }
+        const inPlayer = restore ?? DEFAULT_INDEX;
+        selectedRef.current = inPlayer;
+        setSelected(inPlayer);
+        scene.select(inPlayer, true);
         setWebgl("ready");
       } catch {
         if (!cancelled) setWebgl("failed");
@@ -242,6 +348,7 @@ export function StoriesConsole() {
     return () => {
       cancelled = true;
       if (raf) cancelAnimationFrame(raf);
+      window.clearTimeout(nudgeTimer);
       visibility.disconnect();
       resize.disconnect();
       window.removeEventListener("scroll", requestSync);
@@ -253,10 +360,14 @@ export function StoriesConsole() {
   }, [reduced]);
 
   // One place that previews a case: the 3D pull-out plus the small DOM label.
-  const preview = useCallback((index: number | null) => {
-    sceneRef.current?.setHover(index);
-    setHovered(index);
-  }, []);
+  const preview = useCallback(
+    (index: number | null) => {
+      if (index !== null) advanceGuide("select");
+      sceneRef.current?.setHover(index);
+      setHovered(index);
+    },
+    [advanceGuide],
+  );
 
   /* ── Pointer: hover pulls a case out (mouse), a tap or click loads it. ── */
   const local = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -310,14 +421,17 @@ export function StoriesConsole() {
   };
 
   const active = loaded ?? selected;
-  const loadedEpisode = loaded !== null ? episodes[loaded] : null;
-  const label = hovered !== null ? episodes[hovered] : null;
-  const status =
-    loaded !== null
-      ? `${episodeLabel(episodes[loaded])}, ${episodes[loaded].title}, is loaded. The screen is up${mode === "scroll" ? "; keep scrolling to watch" : ""}.`
+  const loadedItem = loaded !== null ? media[loaded] : null;
+  const label = hovered !== null ? media[hovered] : null;
+  const named = (item: ConsoleMedia) => (item.episode ? `${item.label}, ${item.title}` : item.title);
+  const status = !userSelected
+    ? ""
+    : loaded !== null
+      ? `${named(media[loaded])} is loaded. The screen is up${mode === "scroll" ? "; keep scrolling to watch" : ""}.`
       : selected !== null
-        ? `Loading ${episodeLabel(episodes[selected])}…`
+        ? `Loading ${named(media[selected])}…`
         : "";
+  const frameTitle = (item: ConsoleMedia) => (item.episode ? `${SHOW_TITLE} — ${item.label}: ${item.title}` : `JazzHQ — ${item.title}`);
 
   // Over the scene it fades as the camera moves in; with reduced motion it sits above the stage instead.
   const heading = (
@@ -329,8 +443,13 @@ export function StoriesConsole() {
   );
 
   return (
-    <section className={`st-stories st-stories--${mode}`} aria-labelledby="st-title">
+    <section
+      className={`st-stories st-stories--${mode}${mode === "scroll" && !userSelected ? " is-locked" : ""}`}
+      aria-labelledby="st-title"
+      style={{ "--st-lock-p": CHECKPOINT[tallLayout ? "tall" : "wide"] } as React.CSSProperties}
+    >
       <div ref={trackRef} className="st-track">
+        <div ref={probeRef} className="st-track__probe" aria-hidden />
         <div ref={stickyRef} className="st-sticky">
           {mode === "reduced" && heading}
           <div ref={stageRef} className="st-stage">
@@ -350,29 +469,31 @@ export function StoriesConsole() {
             {mode !== "reduced" && heading}
 
             {mode !== "static" && (
-              <div ref={screenRef} className={`st-screen${screenUp && loadedEpisode ? " is-up" : ""}`}>
-                {loadedEpisode && screenUp && !playing && (
+              <div ref={screenRef} className={`st-screen${screenUp && loadedItem && userSelected ? " is-up" : ""}`}>
+                {loadedItem && userSelected && screenUp && !playing && (
                   <>
-                    <button type="button" className="st-screen__play" onClick={() => setPlaying(true)} aria-label={`Watch ${episodeLabel(loadedEpisode)}: ${loadedEpisode.title}`}>
+                    <button type="button" className="st-screen__play" onClick={() => setPlaying(true)} aria-label={`Watch ${named(loadedItem)}`}>
                       <span className="st-screen__glyph" aria-hidden>
                         <svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" /></svg>
                       </span>
                     </button>
                     <div className="st-screen__actions">
                       <button type="button" className="st-screen__watch" onClick={() => setPlaying(true)}>
-                        Watch episode
+                        {loadedItem.episode ? "Watch episode" : "Watch conversation"}
                       </button>
-                      <Link className="st-screen__notes" href={episodeHref(loadedEpisode)} onClick={() => markNotesFromConsole(loadedEpisode.slug)}>
-                        Read episode notes →
-                      </Link>
+                      {loadedItem.href && (
+                        <Link className="st-screen__notes" href={loadedItem.href} onClick={() => markNotesFromConsole(loadedItem.key)}>
+                          Read episode notes →
+                        </Link>
+                      )}
                     </div>
                   </>
                 )}
-                {loadedEpisode && screenUp && playing && (
+                {loadedItem && userSelected && screenUp && playing && (
                   <div className="st-screen__player">
                     <iframe
-                      src={embedUrl(loadedEpisode)}
-                      title={`${SHOW_TITLE} — ${episodeLabel(loadedEpisode)}: ${loadedEpisode.title}`}
+                      src={embedUrl(loadedItem)}
+                      title={frameTitle(loadedItem)}
                       allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
                       allowFullScreen
                       referrerPolicy="strict-origin-when-cross-origin"
@@ -386,19 +507,35 @@ export function StoriesConsole() {
             )}
 
             <p ref={labelRef} className={`st-label${label ? " is-visible" : ""}`} aria-hidden>
-              {label && `EP. ${episodeNumber(label)}${label.guest ? ` · ${label.guest}` : ""}`}
+              {label?.caption}
             </p>
+
+            {mode === "scroll" && (
+              <>
+                <div ref={rightShelfRef} className="st-shelf" aria-hidden>
+                  <span className="st-shelf__name">{COLLECTION_LABEL["first-take"]}</span>
+                  <span className={`st-shelf__hint${guide === "done" ? " is-done" : ""}`}>
+                    {guide === "preview" ? `${touch ? "Tap" : "Hover"} a case to preview →` : "Select an episode to continue"}
+                  </span>
+                </div>
+                {moreConversations.length > 0 && (
+                  <div ref={leftShelfRef} className="st-shelf" aria-hidden>
+                    <span className="st-shelf__name">{COLLECTION_LABEL["more-conversations"]}</span>
+                  </div>
+                )}
+              </>
+            )}
 
             {mode === "static" && (
               <div className="st-static">
                 {active !== null && (
                   <div className="st-static__screen">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={episodes[active].thumbnail} alt="" />
-                    <a href={watchUrl(episodes[active])} target="_blank" rel="noopener noreferrer">
-                      Watch {episodeLabel(episodes[active])} on YouTube ↗
+                    <img src={media[active].thumbnail} alt="" />
+                    <a href={watchUrl(media[active])} target="_blank" rel="noopener noreferrer">
+                      Watch on YouTube ↗
                     </a>
-                    <Link href={episodeHref(episodes[active])}>Read episode notes →</Link>
+                    {media[active].href && <Link href={media[active].href}>Read episode notes →</Link>}
                   </div>
                 )}
               </div>
@@ -406,40 +543,49 @@ export function StoriesConsole() {
 
             <p className={`st-hint${hint ? " is-visible" : ""}`} aria-hidden>
               {hint === "explore" && <>Scroll to explore <span>↓</span></>}
-              {hint === "choose" && (hovered !== null && tall ? "Tap again to load it" : tall ? "Tap a case to pull it out" : "Choose a case to load it")}
+              {hint === "choose" && hovered !== null && "Tap again to load it"}
               {hint === "screen" && <>Keep scrolling to the screen <span>↓</span></>}
             </p>
           </div>
 
-          <nav className="st-episodes" aria-label={`${SHOW_NAME} episodes`}>
-            <ol>
-              {episodes.map((episode, index) => (
-                <li key={episode.slug}>
-                  <button
-                    type="button"
-                    className="st-episode"
-                    aria-pressed={selected === index}
-                    onClick={() => choose(index)}
-                    onFocus={() => preview(index)}
-                    onBlur={() => preview(null)}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={episode.thumbnail} alt="" width={64} height={36} loading="lazy" />
-                    <span>
-                      <span className="st-episode__num">EP {episodeNumber(episode)}</span>
-                      <span className="st-sr-only">
-                        {" "}— {episode.title}
-                        {episode.guest ? `, with ${episode.guest}` : ""}. {selected === index ? "Loaded in the player." : "Load into the player."}
-                      </span>
-                    </span>
-                  </button>
-                  <Link className="st-episode__link" href={episodeHref(episode)}>
-                    <span className="st-sr-only">{episodeLabel(episode)} page</span>
-                    <span aria-hidden>↗</span>
-                  </Link>
-                </li>
-              ))}
-            </ol>
+          <nav className="st-episodes" aria-label="Stories collections">
+            {[firstTake, moreConversations].map((group) =>
+              group.length === 0 ? null : (
+                <ol key={group[0].collection} aria-label={COLLECTION_LABEL[group[0].collection]}>
+                  {group.map((item) => {
+                    const index = media.indexOf(item);
+                    return (
+                      <li key={item.key}>
+                        <button
+                          type="button"
+                          className="st-episode"
+                          aria-pressed={userSelected && selected === index}
+                          onClick={() => choose(index)}
+                          onFocus={() => preview(index)}
+                          onBlur={() => preview(null)}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={item.thumbnail} alt="" width={64} height={36} loading="lazy" />
+                          <span>
+                            <span className="st-episode__num">{item.spineMark ? `EP ${item.spineMark}` : item.duration}</span>
+                            <span className="st-sr-only">
+                              {" "}— {item.title}
+                              {item.guest ? `, with ${item.guest}` : ""}, {item.duration}. {userSelected && selected === index ? "Loaded in the player." : "Load into the player."}
+                            </span>
+                          </span>
+                        </button>
+                        {item.href && (
+                          <Link className="st-episode__link" href={item.href}>
+                            <span className="st-sr-only">{item.label} notes</span>
+                            <span aria-hidden>↗</span>
+                          </Link>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              ),
+            )}
           </nav>
 
           <p className="st-sr-only" aria-live="polite">
