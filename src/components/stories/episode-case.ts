@@ -87,7 +87,7 @@ function coverCanvas(img: HTMLImageElement | null, item: ConsoleMedia, fonts: Fo
 }
 
 /** Spine: what you read while the case is stored. FIRST TAKE spines are
-    dark and numbered; the other conversations are light and unnumbered. */
+    dark and numbered; More stories are light and unnumbered. */
 function spineCanvas(item: ConsoleMedia, fonts: Fonts) {
   const c = document.createElement("canvas");
   c.width = 72;
@@ -118,7 +118,7 @@ function spineCanvas(item: ConsoleMedia, fonts: Fonts) {
   ctx.textBaseline = "middle";
   ctx.fillStyle = dark ? "#d9d6de" : "#3a3840";
   ctx.font = `600 20px ${fonts.mono}`;
-  ctx.fillText(dark ? "FIRST TAKE" : "CONVERSATIONS", 0, 0);
+  ctx.fillText(dark ? "FIRST TAKE" : "MORE STORIES", 0, 0);
   ctx.fillStyle = dark ? "#8d8a95" : "#8a857c";
   ctx.font = `500 17px ${fonts.mono}`;
   ctx.fillText("JAZZHQ", c.height - (y + 26) - 96, 0);
@@ -165,8 +165,11 @@ export function createEpisodeCase(options: {
   const { item, index, image, fonts, shared, texture, track } = options;
   const cover = track(new THREE.MeshStandardMaterial({ map: texture(coverCanvas(image, item, fonts)), roughness: 0.32 }));
   const spine = track(new THREE.MeshStandardMaterial({ map: texture(spineCanvas(item, fonts)), roughness: 0.4 }));
-  // Faces: +x opening edge, −x spine, ±y, +z cover, −z back.
-  const insert = new THREE.Mesh(shared.insertGeo, [shared.edge, spine, shared.edge, shared.edge, cover, shared.back]);
+  // Faces: ±x (spine on the side that faces the room once shelved), ±y, +z cover, −z back.
+  // Left-shelf cases turn their cover toward the player (spine on −x), right-shelf
+  // cases mirror that (spine on +x), so both shelves fan their covers inward.
+  const sides = item.side === "left" ? [shared.edge, spine] : [spine, shared.edge];
+  const insert = new THREE.Mesh(shared.insertGeo, [...sides, shared.edge, shared.edge, cover, shared.back]);
   insert.position.y = 0.005;
   insert.userData.index = index;
   const shell = new THREE.Mesh(shared.shellGeo, shared.shell);

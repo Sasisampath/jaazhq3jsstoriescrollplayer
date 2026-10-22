@@ -1,8 +1,8 @@
 import { episodeHref, episodeNumber, episodes, type Episode } from "./episodes";
 
 /* Everything stored in the Stories console, from one list.
-   - Right shelf: FIRST TAKE, the primary collection (from episodes.ts).
-   - Left shelf: more JazzHQ conversations, secondary; no episode numbers and
+   - Left shelf: FIRST TAKE, the primary collection (from episodes.ts).
+   - Right shelf: more JazzHQ stories, secondary; no episode numbers and
      no notes pages, they play on the console screen.
    To add a conversation: add an entry below with its public YouTube ID and a
    thumbnail in /public/podcasts/conversations. Never use studio.youtube.com links. */
@@ -69,11 +69,11 @@ export const conversations: Conversation[] = [
   },
 ];
 
-export type Collection = "first-take" | "more-conversations";
+export type Collection = "first-take" | "more-stories";
 
 export const COLLECTION_LABEL: Record<Collection, string> = {
-  "first-take": "FIRST TAKE",
-  "more-conversations": "MORE CONVERSATIONS",
+  "first-take": "First Take",
+  "more-stories": "More stories",
 };
 
 /** One physical case in the console. */
@@ -105,7 +105,7 @@ export const consoleMedia: ConsoleMedia[] = [
     (e): ConsoleMedia => ({
       key: e.slug,
       collection: "first-take",
-      side: "right",
+      side: "left",
       primary: true,
       title: e.title,
       guest: e.guest,
@@ -125,16 +125,16 @@ export const consoleMedia: ConsoleMedia[] = [
     .map(
       (c): ConsoleMedia => ({
         key: c.youtubeId,
-        collection: "more-conversations",
-        side: "left",
+        collection: "more-stories",
+        side: "right",
         primary: false,
         title: c.title,
         duration: c.duration,
         youtubeId: c.youtubeId,
         thumbnail: c.thumbnail,
-        kicker: "JAZZHQ · CONVERSATION",
+        kicker: "JAZZHQ · STORY",
         label: c.title,
-        caption: `CONVERSATION · ${c.duration}`,
+        caption: `STORY · ${c.duration}`,
       }),
     ),
 ];

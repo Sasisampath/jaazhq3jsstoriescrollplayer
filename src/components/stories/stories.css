@@ -253,7 +253,7 @@
   transition: opacity 0.2s ease;
 }
 
-.st-label.is-visible.is-placed {
+.st-label[data-on="true"].is-placed {
   opacity: 1;
 }
 
@@ -278,11 +278,18 @@
 }
 
 .st-shelf__name {
-  font-family: var(--st-font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  color: #3a3d42;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--st-muted);
+}
+
+.st-shelf--primary .st-shelf__name {
+  font-family: var(--st-font-display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--st-ink);
 }
 
 .st-shelf__hint {
@@ -298,25 +305,37 @@
 /* While watching, only the console and its screen: heading, captions and hints step aside. */
 .st-stories.is-viewing .st-head,
 .st-stories.is-viewing .st-shelf,
+.st-stories.is-viewing .st-cta,
 .st-stories.is-viewing .st-label,
 .st-stories.is-viewing .st-hint {
   opacity: 0 !important;
   transition: opacity 0.3s ease;
 }
 
-/* Selected episode: watch is the primary action, the notes page a quiet link. */
-.st-screen__actions {
+/* Selected episode: Watch / notes sit under the player (the media is in there),
+   Watch as the action, the notes page a quieter editorial link. */
+.st-cta {
   position: absolute;
-  top: calc(100% + 14px);
-  left: 50%;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  transform: translateX(-50%);
+  top: 0;
+  left: 0;
+  z-index: 3;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
   white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-50%);
+  transition: opacity 0.3s ease, visibility 0s linear 0.3s;
 }
 
-.st-screen__watch {
+.st-cta[data-on="true"].is-placed {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.3s ease;
+}
+
+.st-cta__watch {
   display: inline-flex;
   align-items: center;
   min-height: 40px;
@@ -330,11 +349,11 @@
   transition: opacity 0.2s ease;
 }
 
-.st-screen__watch:hover {
+.st-cta__watch:hover {
   opacity: 0.9;
 }
 
-.st-screen__notes {
+.st-cta__notes {
   font-size: 14px;
   font-weight: 500;
   color: var(--st-ink);
@@ -344,9 +363,72 @@
   transition: text-decoration-color 0.2s ease;
 }
 
-.st-screen__notes:hover,
-.st-screen__notes:focus-visible {
+.st-cta__notes:hover,
+.st-cta__notes:focus-visible {
   text-decoration-color: currentColor;
+}
+
+/* ── Archive browsing: restrained utility controls under the FIRST TAKE shelf ── */
+.st-browse {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  pointer-events: auto;
+}
+
+.st-browse__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.st-browse__step {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  font-size: 16px;
+  color: var(--st-ink);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.st-browse__step:hover:not(:disabled) {
+  background: rgb(36 36 36 / 0.06);
+}
+
+.st-browse__count {
+  min-width: 108px;
+  font-family: var(--st-font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-align: center;
+  color: var(--st-ink);
+}
+
+.st-browse__pick {
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #4a5058;
+  text-decoration: underline;
+  text-decoration-color: rgb(74 80 88 / 0.35);
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.st-browse__pick:hover:not(:disabled) {
+  color: var(--st-ink);
+  text-decoration-color: currentColor;
+}
+
+.st-browse button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 /* ── Accessible episode list: hidden until it has keyboard focus ── */
@@ -502,6 +584,15 @@
 }
 
 @media (max-width: 767px) {
+  .st-browse__step {
+    width: 44px;
+    height: 44px;
+  }
+
+  .st-browse__pick {
+    min-height: 40px;
+  }
+
   .st-track {
     --st-track-h: 520svh;
   }

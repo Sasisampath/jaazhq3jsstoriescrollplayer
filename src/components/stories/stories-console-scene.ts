@@ -22,6 +22,8 @@ export type StoriesLayout = "wide" | "tall";
 
 export type ScreenRect = { left: number; top: number; width: number; height: number };
 
+export type Point = { x: number; y: number };
+
 export type StoriesScene = {
   setProgress(progress: number): void;
   setLayout(layout: StoriesLayout): void;
@@ -31,6 +33,8 @@ export type StoriesScene = {
       (px), a near miss picks the closest case — for fingers on thin spines. */
   pick(x: number, y: number, radius?: number): number | null;
   setHover(index: number | null): void;
+  /** Archive browsing: the one case standing a little forward and more front-facing (null: none). */
+  setFocus(index: number | null): void;
   /** One small "pull me" nudge on a stored case (discoverability hint). */
   nudge(index: number): void;
   /** A brief status-light flash: the player acknowledging a choice it already holds. */
@@ -55,8 +59,9 @@ type Options = {
   onLoaded: (index: number | null) => void;
   /** Stage point just under the hovered case (for a small attached label), or null. */
   onHoverAnchor: (point: { x: number; y: number } | null) => void;
-  /** Stage points just under each shelf's row of cases (null when off-stage), for the shelf captions. */
-  onShelfAnchors: (anchors: { left: { x: number; y: number } | null; right: { x: number; y: number } | null }) => void;
+  /** Stage points just under each shelf's row of cases and under the player (null when off-stage),
+      for the shelf captions and the Watch row. */
+  onAnchors: (anchors: { left: Point | null; right: Point | null; player: Point | null }) => void;
 };
 
 /* ── Dimensions (world units ≈ metres) ── */
@@ -75,7 +80,9 @@ const PANEL_FRONT = D / 2 + PANEL_T;
 const SLOT_Y = LEG_H + BODY_H * 0.68;
 const SLOT_W = 0.56;
 // One FIRST TAKE case. Stored spine-out; the cover faces the viewer once pulled.
-const CASE_PITCH = CASE_T + 0.01;
+// Cases rest fanned toward the room so their covers read before any hover.
+const CASE_PITCH = 0.09;
+const FAN = 0.33; // share of the quarter-turn toward the viewer at rest (~30°)
 const SLOT_H = 0.054;
 const FEATURE_AFTER = 0.45; // seconds of hover before a case comes fully forward
 
@@ -106,22 +113,23 @@ type Pose = [tx: number, ty: number, tz: number, halfW: number, halfH: number, a
 
 const POSES = {
   wide: {
-    full: [0, 0.62, 0, 2.6, 1.3, -0.4, 0.3, 0.1],
-    fullUp: [0, 1.12, -0.1, 2.6, 1.85, -0.36, 0.22, 0.13],
-    // First stop: the FIRST TAKE shelf on the right, with the player's edge for context.
-    archiveRight: [0.66, 0.56, 0.3, 0.92, 0.48, -0.14, 0.1, 0],
-    archive: [0, 0.62, 0.3, 1.66, 0.62, 0, 0.1, 0],
-    archiveUp: [0, 1.1, 0.2, 1.8, 1.16, 0, 0.08, 0],
+    // Seen from the right, so the FIRST TAKE covers (left shelf, facing the player) read first.
+    full: [0, 0.62, 0, 2.6, 1.3, 0.4, 0.3, 0.04],
+    fullUp: [0, 1.12, -0.1, 2.6, 1.78, 0.34, 0.22, 0.02],
+    // First stop: the FIRST TAKE shelf on the left, with the player's edge for context.
+    archiveLeft: [-0.78, 0.56, 0.3, 0.95, 0.48, 0.16, 0.1, -0.13],
+    archive: [0, 0.62, 0.3, 1.66, 0.62, 0, 0.1, -0.08],
+    archiveUp: [0, 1.1, 0.2, 1.8, 1.16, 0, 0.08, -0.1],
     player: [0, 0.56, 0.3, 1.02, 0.46, 0, 0.07, 0],
     screen: [0, TOP + SCREEN_H / 2 - 0.08, -0.1, 1.3, 0.92, 0, 0.05, 0],
     // Watching: screen centred and square-on in its own plane, large, console top still in view.
     playback: [0, TOP + SCREEN_H / 2 - 0.14, SCREEN_Z, 1.5, 0.98, 0, 0.02, 0],
   },
   tall: {
-    full: [0, 0.5, 0, 1.68, 0.8, -0.5, 0.42, 0.1],
-    fullUp: [0, 1.0, -0.1, 1.68, 1.9, -0.42, 0.3, 0.14],
-    archiveLeft: [-0.5, 0.52, 0.3, 0.6, 0.45, 0.12, 0.12, 0],
-    archiveRight: [0.5, 0.52, 0.3, 0.6, 0.45, -0.12, 0.12, 0],
+    full: [0, 0.5, 0, 1.68, 0.8, 0.5, 0.42, -0.04],
+    fullUp: [0, 1.0, -0.1, 1.68, 1.9, 0.42, 0.3, -0.1],
+    archiveLeft: [-0.84, 0.52, 0.3, 0.66, 0.45, 0.16, 0.12, -0.08],
+    archiveRight: [0.98, 0.52, 0.3, 0.7, 0.45, -0.16, 0.12, -0.08],
     player: [0, 0.56, 0.3, 0.64, 0.42, 0, 0.08, 0],
     screen: [0, TOP + SCREEN_H / 2 - 0.12, -0.1, 1.14, 0.9, 0, 0.05, 0],
     playback: [0, TOP + SCREEN_H / 2 - 0.1, SCREEN_Z, 1.2, 0.95, 0, 0.02, 0],
@@ -247,15 +255,15 @@ async function resolveFonts() {
   return { display, mono };
 }
 
-/* ── Case layout: spine-out, each collection on its own shelf, in data order
-   reading left → right. FIRST TAKE starts against the player on the right;
-   the other conversations end against it on the left. An oak bookend closes
-   each row. Each bay holds ~13 cases. ── */
+/* ── Case layout: each collection on its own shelf, in data order reading
+   left → right, fanned so the covers face into the room. The left row ends
+   against the player, the right row starts against it. An oak bookend closes
+   each row. Each bay holds ~8 cases at this spacing. ── */
 
 type Slot = { x: number; z: number; bay: -1 | 1; k: number };
 
 function archiveSlots(items: ConsoleMedia[]): Slot[] {
-  const inner = BAY_IN + SLAB + 0.02;
+  const inner = BAY_IN + SLAB + 0.13; // room for the fanned case to clear the divider
   const left = items.filter((item) => item.side === "left").length;
   let l = 0;
   let r = 0;
@@ -277,7 +285,8 @@ type Case = {
   feature: number; // a held hover: a little further forward, cover square-on
   dwell: number;
   spread: number; // neighbours part away from a hovered case
-  vel: Record<"hover" | "feature" | "spread", number>; // spring velocities
+  focus: number; // archive browsing: stands a little forward, more front-facing
+  vel: Record<"hover" | "feature" | "spread" | "focus", number>; // spring velocities
   nudge: number; // seconds into the one-off "pull me" hint, -1 when idle
   image: HTMLImageElement | null;
 };
@@ -433,7 +442,8 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
       feature: 0,
       dwell: 0,
       spread: 0,
-      vel: { hover: 0, feature: 0, spread: 0 },
+      focus: 0,
+      vel: { hover: 0, feature: 0, spread: 0, focus: 0 },
       nudge: -1,
       image: images[i],
     };
@@ -443,7 +453,7 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
     const row = slots.filter((sl) => sl.bay === bay);
     if (!row.length) continue;
     const outer = row.reduce((m, sl) => (bay < 0 ? Math.min(m, sl.x) : Math.max(m, sl.x)), row[0].x);
-    box(0.03, 0.26, 0.24, oakInner, outer + bay * (CASE_T / 2 + 0.03), BAY_FLOOR + 0.13, row[0].z);
+    box(0.03, 0.26, 0.24, oakInner, outer + bay * 0.17, BAY_FLOOR + 0.13, row[0].z);
   }
   const pickables = cases.map((c) => c.mesh);
 
@@ -456,6 +466,7 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
   let progress = 0;
   let selected: number | null = null;
   let hovered: number | null = null;
+  let focused: number | null = null;
   let loadedReported: number | null = null;
   let raise = 0; // 0 down … 1 up (linear clock; eased when applied)
   let ledPulse = 0; // 1 → 0 after acknowledge()
@@ -490,16 +501,16 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
       const screenPose = mix(P.player, P.screen, up);
       // Once the screen is up it is part of "the whole object", so the wide views make room for it.
       // full → FIRST TAKE shelf → both shelves → player → screen
-      let pose = mix(mix(P.full, P.fullUp, up), P.archiveRight, span(p, 0.06, 0.26));
+      let pose = mix(mix(P.full, P.fullUp, up), P.archiveLeft, span(p, 0.06, 0.26));
       pose = mix(pose, mix(P.archive, P.archiveUp, up), span(p, 0.38, 0.48));
       pose = mix(pose, P.player, span(p, 0.56, 0.68));
       return mix(pose, screenPose, span(p, 0.74, 0.9));
     }
     const P = POSES.tall;
     const screenPose = mix(P.player, P.screen, up);
-    // full → FIRST TAKE (right) → more conversations (left) → player → screen
-    let pose = mix(mix(P.full, P.fullUp, up), P.archiveRight, span(p, 0.05, 0.24));
-    pose = mix(pose, P.archiveLeft, span(p, 0.34, 0.44));
+    // full → FIRST TAKE (left) → More stories (right) → player → screen
+    let pose = mix(mix(P.full, P.fullUp, up), P.archiveLeft, span(p, 0.05, 0.24));
+    pose = mix(pose, P.archiveRight, span(p, 0.34, 0.44));
     pose = mix(pose, P.player, span(p, 0.54, 0.64));
     return mix(pose, screenPose, span(p, 0.7, 0.88));
   };
@@ -522,9 +533,11 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
      its 0…1 clock then takes it out, across to the slot and in:
      shelf → slide outward → turn cover to viewer → arc to player → insert. */
   const pos = new THREE.Vector3();
-  const STORED_Y = Math.PI / 2; // spine to the front
   const placeCase = (c: Case) => {
     const { slot } = c;
+    // Shelved: spine to the front, cover turned toward the player; left and right mirror.
+    const stored = slot.bay < 0 ? Math.PI / 2 : -Math.PI / 2;
+    const fo = c.focus;
     const u = c.u;
     const h = c.hover;
     const f = c.feature;
@@ -534,9 +547,11 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
     // One-off hint: lifts and leans out a few millimetres, pauses, settles back (the hover proper stays the visitor's).
     const n = c.nudge < 0 ? 0 : c.nudge < 0.45 ? ease(c.nudge / 0.45) : c.nudge < 0.95 ? 1 : 1 - ease(Math.min(1, (c.nudge - 0.95) / 0.6));
     const bx = slot.x + c.spread * 0.034;
-    const by = BAY_FLOOR + slide * 0.012 + f * 0.03 + n * 0.013;
-    const bz = slot.z + slide * 0.3 + f * 0.07 + n * 0.02;
-    const bry = STORED_Y * (1 - 0.8 * face - 0.2 * f) - n * 0.07;
+    const by = BAY_FLOOR + slide * 0.012 + f * 0.03 + n * 0.013 + fo * 0.008;
+    const bz = slot.z + slide * 0.3 + f * 0.07 + n * 0.02 + fo * 0.1 * (1 - slide);
+    // Resting fan → browse focus turns it further → hover turns it fully to the viewer.
+    const turned = FAN + (1 - FAN) * Math.min(1, 0.8 * face + 0.2 * f + 0.4 * fo * (1 - face));
+    const bry = stored * (1 - turned) - Math.sign(stored) * n * 0.07;
     // Selection path.
     const out = span(u, 0, 0.22);
     const turn = span(u, 0.08, 0.3);
@@ -574,14 +589,15 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
       }
       c.dwell = isHovered ? c.dwell + dt : 0;
       if (isHovered && c.dwell < FEATURE_AFTER + 0.05) moving = true; // keep ticking until the dwell completes
-      const other = hovered !== null ? cases[hovered] : null;
+      const other = hovered !== null ? cases[hovered] : focused !== null ? cases[focused] : null;
       const gap = other && other !== c && other.slot.bay === c.slot.bay ? Math.abs(other.slot.k - c.slot.k) : 0;
       const spreadGoal = other && gap > 0 && gap <= 2 && other.u === 0 ? Math.sign(c.slot.k - other.slot.k) * (gap === 1 ? 1 : 0.35) : 0;
       // Critically damped springs: soft start, no overshoot, settles exactly on the slot.
       const goals: Array<[keyof Case["vel"], number, number]> = [
         ["hover", isHovered ? 1 : 0, 70],
         ["feature", isHovered && c.dwell >= FEATURE_AFTER ? 1 : 0, 40],
-        ["spread", spreadGoal, 70],
+        ["spread", hovered !== null ? spreadGoal : spreadGoal * 0.6, 70],
+        ["focus", cases.indexOf(c) === focused && c.u === 0 && c.target === 0 ? 1 : 0, 55],
       ];
       for (const [key, g, k] of goals) {
         if (c[key] === g && c.vel[key] === 0) continue;
@@ -711,14 +727,21 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
     const py = ((1 - corner.y) / 2) * height;
     return px > 0 && px < width && py > 0 && py < height ? { x: px, y: py } : null;
   };
+  const playerPoint = () => {
+    corner.set(0, LEG_H - 0.012, D / 2).applyMatrix4(rig.matrixWorld).project(camera);
+    const px = ((corner.x + 1) / 2) * width;
+    const py = ((1 - corner.y) / 2) * height;
+    return px > 0 && px < width && py > 0 && py < height ? { x: px, y: py } : null;
+  };
   let lastShelves = "";
   const reportShelves = () => {
     const left = shelfPoint(-1);
     const right = shelfPoint(1);
-    const key = [left, right].map((p) => (p ? `${Math.round(p.x)},${Math.round(p.y)}` : "-")).join("|");
+    const player = playerPoint();
+    const key = [left, right, player].map((p) => (p ? `${Math.round(p.x)},${Math.round(p.y)}` : "-")).join("|");
     if (key !== lastShelves) {
       lastShelves = key;
-      options.onShelfAnchors({ left, right });
+      options.onAnchors({ left, right, player });
     }
   };
 
@@ -806,6 +829,11 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
         }
       });
       return best;
+    },
+    setFocus(index) {
+      if (index === focused) return;
+      focused = index;
+      invalidate();
     },
     setHover(index) {
       if (index === hovered) return;
