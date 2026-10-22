@@ -234,19 +234,25 @@
   background: #fff;
 }
 
-/* ── Hover label: a small caption attached just under the pulled-out case ── */
+/* ── Hover label: a small warm-white tag just under the pulled-out case ── */
 .st-label {
   position: absolute;
   top: 0;
   left: 0;
   z-index: 2;
   margin: 0;
+  padding: 6px 10px;
+  border: 1px solid #e8e3d7;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 0.94);
+  box-shadow: 0 1px 2px rgb(36 30 20 / 0.06);
   font-family: var(--st-font-mono);
   font-size: 11px;
   font-weight: 500;
+  line-height: 1.2;
   letter-spacing: 0.12em;
   white-space: nowrap;
-  color: #4b4f55;
+  color: #242424;
   pointer-events: none;
   opacity: 0;
   transform: translateX(-50%);
@@ -275,21 +281,6 @@
 
 .st-shelf.is-shown.is-placed {
   opacity: 1;
-}
-
-.st-shelf__name {
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: -0.005em;
-  color: var(--st-muted);
-}
-
-.st-shelf--primary .st-shelf__name {
-  font-family: var(--st-font-display);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
-  color: var(--st-ink);
 }
 
 .st-shelf__hint {
@@ -409,21 +400,41 @@
   color: var(--st-ink);
 }
 
+/* A secondary discovery action: compact, dark, clearly a button (Watch stays the primary CTA). */
 .st-browse__pick {
-  min-height: 32px;
-  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  margin-top: 2px;
+  padding: 7px 14px 7px 12px;
+  border-radius: 10px;
+  background: #18171c;
+  color: #fff;
   font-size: 13px;
   font-weight: 500;
-  color: #4a5058;
-  text-decoration: underline;
-  text-decoration-color: rgb(74 80 88 / 0.35);
-  text-underline-offset: 4px;
   cursor: pointer;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.12);
+  transition: background 0.2s ease, transform 0.2s ease;
 }
 
 .st-browse__pick:hover:not(:disabled) {
-  color: var(--st-ink);
-  text-decoration-color: currentColor;
+  background: #2a2930;
+}
+
+.st-browse__pick:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.st-browse__pick:focus-visible {
+  outline: 2px solid var(--st-purple);
+  outline-offset: 3px;
+}
+
+.st-browse__spark {
+  width: 15px;
+  height: 15px;
+  fill: #8f8aff;
 }
 
 .st-browse button:disabled {

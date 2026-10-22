@@ -92,7 +92,6 @@ export function StoriesConsole() {
   const screenRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLParagraphElement>(null);
   const firstTakeShelfRef = useRef<HTMLDivElement>(null);
-  const moreStoriesShelfRef = useRef<HTMLDivElement>(null);
   const ctaRef = useRef<HTMLDivElement>(null);
   const anchorsRef = useRef<{ screen: ScreenRect | null; player: Point | null }>({ screen: null, player: null });
   const probeRef = useRef<HTMLDivElement>(null);
@@ -213,7 +212,8 @@ export function StoriesConsole() {
     [markInteracted, applyFocus],
   );
 
-  /** "Pick for me": the focus runs along the shelf, slows, and settles on a different case. Nothing loads or plays. */
+  /** "Pick for me": the focus runs along the shelf, slows, settles on a different case, and that case
+      then loads into the player (a deliberate choice, so it also unlocks the journey). Nothing autoplays. */
   const pickForMe = useCallback(() => {
     const shelf = shelfFirstTake(selectedRef.current);
     if (shelf.length < 2) return;
@@ -224,6 +224,7 @@ export function StoriesConsole() {
     const to = choices[Math.floor(Math.random() * choices.length)];
     if (reduced) {
       applyFocus(shelf[to]);
+      choose(shelf[to]);
       return;
     }
     const steps = shelf.length * 2 + ((to - from + shelf.length) % shelf.length); // two laps, then land
@@ -231,14 +232,11 @@ export function StoriesConsole() {
     let at = 0;
     for (let n = 1; n <= steps; n += 1) {
       at += 70 + 260 * Math.pow(n / steps, 2.4); // quick at first, then slowing down
-      pickTimers.current.push(
-        window.setTimeout(() => {
-          applyFocus(shelf[(from + n) % shelf.length]);
-          if (n === steps) setPicking(false);
-        }, at),
-      );
+      pickTimers.current.push(window.setTimeout(() => applyFocus(shelf[(from + n) % shelf.length]), at));
     }
-  }, [markInteracted, applyFocus, reduced]);
+    // A short beat on the chosen cover, then it goes into the player.
+    pickTimers.current.push(window.setTimeout(() => choose(shelf[to]), at + 550));
+  }, [markInteracted, applyFocus, choose, reduced]);
 
   useEffect(() => {
     const track = trackRef.current;
@@ -284,7 +282,6 @@ export function StoriesConsole() {
       const ranges = RANGES[isTall ? "tall" : "wide"];
       const showShelves = !reduced && inRange(p, ranges.shelves);
       firstTakeShelfRef.current?.classList.toggle("is-shown", showShelves);
-      moreStoriesShelfRef.current?.classList.toggle("is-shown", showShelves);
       // Archive browsing (focus + controls) is on while the FIRST TAKE shelf is framed.
       const browseNow = !reduced && inRange(p, ranges.browse);
       if (browseNow !== browseRef.current) {
@@ -351,16 +348,17 @@ export function StoriesConsole() {
         const { createStoriesScene } = await import("./stories-console-scene");
         const scene = await createStoriesScene(canvas, {
           items: media,
+          // The metal plaques are the shelf labels.
+          badges: {
+            [FIRST_TAKE_SIDE]: COLLECTION_LABEL["first-take"].toUpperCase(),
+            [FIRST_TAKE_SIDE === "left" ? "right" : "left"]: moreStories.length ? COLLECTION_LABEL["more-stories"].toUpperCase() : undefined,
+          },
           onScreen,
           onAnchors: ({ left, right, player }) => {
             anchorsRef.current.player = player;
             placeCta();
             const ftPoint = FIRST_TAKE_SIDE === "left" ? left : right;
-            const msPoint = FIRST_TAKE_SIDE === "left" ? right : left;
-            for (const [el, point] of [
-              [firstTakeShelfRef.current, ftPoint],
-              [moreStoriesShelfRef.current, msPoint],
-            ] as const) {
+            for (const [el, point] of [[firstTakeShelfRef.current, ftPoint]] as const) {
               if (!el) continue;
               if (point) {
                 el.style.left = `${point.x}px`;
@@ -632,9 +630,6 @@ export function StoriesConsole() {
             {mode === "scroll" && (
               <>
                 <div ref={firstTakeShelfRef} className="st-shelf st-shelf--primary">
-                  <span className="st-shelf__name" aria-hidden>
-                    {COLLECTION_LABEL["first-take"]}
-                  </span>
                   {browsing && focused !== null && (
                     <div className="st-browse" role="group" aria-label="Browse First Take">
                       <div className="st-browse__row">
@@ -649,6 +644,10 @@ export function StoriesConsole() {
                         </button>
                       </div>
                       <button type="button" className="st-browse__pick" onClick={pickForMe} disabled={picking}>
+                        <svg className="st-browse__spark" viewBox="0 0 24 24" aria-hidden>
+                          <path d="M12 2.5c.5 4.6 2.4 6.5 7 7-4.6.5-6.5 2.4-7 7-.5-4.6-2.4-6.5-7-7 4.6-.5 6.5-2.4 7-7Z" />
+                          <path d="M19 14.5c.25 2 1 2.75 3 3-2 .25-2.75 1-3 3-.25-2-1-2.75-3-3 2-.25 2.75-1 3-3Z" />
+                        </svg>
                         Pick for me
                       </button>
                     </div>
@@ -657,11 +656,6 @@ export function StoriesConsole() {
                     Pick a story to explore
                   </span>
                 </div>
-                {moreStories.length > 0 && (
-                  <div ref={moreStoriesShelfRef} className="st-shelf" aria-hidden>
-                    <span className="st-shelf__name">{COLLECTION_LABEL["more-stories"]}</span>
-                  </div>
-                )}
               </>
             )}
 

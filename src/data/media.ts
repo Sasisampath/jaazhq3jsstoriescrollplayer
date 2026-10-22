@@ -67,6 +67,18 @@ export const conversations: Conversation[] = [
     youtubeId: "3SwuKwkuIKA",
     thumbnail: "/podcasts/conversations/3SwuKwkuIKA.jpg",
   },
+  {
+    title: "The ONLY SaaS partnerships masterclass you’ll ever need: a deep dive ft Heather Pertel @rocketlane",
+    duration: "36:21",
+    youtubeId: "s5E0xEiMbQY",
+    thumbnail: "/podcasts/conversations/s5E0xEiMbQY.jpg",
+  },
+  {
+    title: "Applying to @ycombinator in 2025? Watch this video NOW! Sneha: Merlin AI (YC S24) spills the tea",
+    duration: "38:08",
+    youtubeId: "mnpfQQn7OH4",
+    thumbnail: "/podcasts/conversations/mnpfQQn7OH4.jpg",
+  },
 ];
 
 export type Collection = "first-take" | "more-stories";

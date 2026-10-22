@@ -52,6 +52,8 @@ export type StoriesScene = {
 
 type Options = {
   items: ConsoleMedia[];
+  /** Engraved on the metal plaque above each shelf, e.g. { left: "FIRST TAKE", right: "MORE STORIES" }. */
+  badges: { left?: string; right?: string };
   onContextLost: () => void;
   /** The screen's image area in stage pixels, or null while it is down / off-stage. */
   onScreen: (rect: ScreenRect | null) => void;
@@ -220,6 +222,82 @@ function screenCanvas(img: HTMLImageElement | null) {
   return c;
 }
 
+/* A manufacturer's plaque: brushed champagne metal, a thin raised edge, a
+   screw at each end and engraved black lettering. */
+const BADGE_W = 0.4;
+const BADGE_H = 0.07;
+
+function badgeCanvas(text: string, fonts: { display: string; mono: string }) {
+  const c = document.createElement("canvas");
+  c.width = 1024;
+  c.height = Math.round((1024 * BADGE_H) / BADGE_W);
+  const ctx = c.getContext("2d")!;
+  const { width: w, height: h } = c;
+  // Brushed metal: a soft sheen across, then fine horizontal grain.
+  const sheen = ctx.createLinearGradient(0, 0, w, h);
+  sheen.addColorStop(0, "#c9ad7c");
+  sheen.addColorStop(0.35, "#e6cf9f");
+  sheen.addColorStop(0.6, "#c4a674");
+  sheen.addColorStop(1, "#dcc292");
+  ctx.fillStyle = sheen;
+  ctx.fillRect(0, 0, w, h);
+  for (let y = 0; y < h; y += 1) {
+    const a = ((y * 7919) % 17) / 340;
+    ctx.fillStyle = y % 2 ? `rgba(255,255,255,${a})` : `rgba(90,70,40,${a * 0.8})`;
+    ctx.fillRect(0, y, w, 1);
+  }
+  // Raised edge: light on top/left, shadow on bottom/right.
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "rgba(255,250,235,0.85)";
+  ctx.beginPath();
+  ctx.moveTo(10, h - 10);
+  ctx.lineTo(10, 10);
+  ctx.lineTo(w - 10, 10);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(95,75,45,0.55)";
+  ctx.beginPath();
+  ctx.moveTo(w - 10, 10);
+  ctx.lineTo(w - 10, h - 10);
+  ctx.lineTo(10, h - 10);
+  ctx.stroke();
+  // Screws.
+  for (const x of [h * 0.55, w - h * 0.55]) {
+    const r = h * 0.13;
+    const g = ctx.createRadialGradient(x - r * 0.35, h / 2 - r * 0.35, r * 0.1, x, h / 2, r);
+    g.addColorStop(0, "#fbf3e1");
+    g.addColorStop(0.6, "#bba57e");
+    g.addColorStop(1, "#7d6a4b");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, h / 2, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(60,48,30,0.7)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.6, h / 2 + r * 0.25);
+    ctx.lineTo(x + r * 0.6, h / 2 - r * 0.25);
+    ctx.stroke();
+  }
+  // Engraved lettering: a light lower edge under dark letters reads as cut into the metal.
+  const size = Math.round(h * 0.42);
+  ctx.font = `600 ${size}px ${fonts.display}`;
+  ctx.textBaseline = "middle";
+  const track = size * 0.42;
+  const chars = [...text];
+  const total = chars.reduce((sum, ch) => sum + ctx.measureText(ch).width, 0) + track * (chars.length - 1);
+  const draw = (dx: number, dy: number, color: string) => {
+    ctx.fillStyle = color;
+    let x = (w - total) / 2;
+    for (const ch of chars) {
+      ctx.fillText(ch, x + dx, h / 2 + dy);
+      x += ctx.measureText(ch).width + track;
+    }
+  };
+  draw(0, 2, "rgba(255,248,230,0.75)");
+  draw(0, 0, "#1d1a16");
+  return c;
+}
+
 function shadowCanvas() {
   const c = document.createElement("canvas");
   c.width = 256;
@@ -264,13 +342,19 @@ type Slot = { x: number; z: number; bay: -1 | 1; k: number };
 
 function archiveSlots(items: ConsoleMedia[]): Slot[] {
   const inner = BAY_IN + SLAB + 0.13; // room for the fanned case to clear the divider
-  const left = items.filter((item) => item.side === "left").length;
+  // A fuller shelf packs a little tighter so the row always fits the bay.
+  const span = W / 2 - SLAB - inner - 0.15;
+  const count = { left: items.filter((i) => i.side === "left").length, right: items.filter((i) => i.side === "right").length };
+  const pitch = (n: number) => (n > 1 ? Math.min(CASE_PITCH, span / (n - 1)) : CASE_PITCH);
   let l = 0;
   let r = 0;
   return items.map((item) => {
     const bay = item.side === "left" ? -1 : 1;
     const k = bay < 0 ? l++ : r++;
-    const x = bay < 0 ? -inner - (left - 1 - k) * CASE_PITCH - CASE_T / 2 : inner + k * CASE_PITCH + CASE_T / 2;
+    const x =
+      bay < 0
+        ? -inner - (count.left - 1 - k) * pitch(count.left) - CASE_T / 2
+        : inner + k * pitch(count.right) + CASE_T / 2;
     return { x, z: D / 2 - 0.045 - CASE_W / 2, bay, k };
   });
 }
@@ -448,12 +532,24 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
       image: images[i],
     };
   });
+  // Metal plaques on the top rail, centred over each shelf.
+  const badgeEdge = track(new THREE.MeshStandardMaterial({ color: 0xbf9f68, roughness: 0.3, metalness: 0.6 }));
+  const badgeGeo = track(new RoundedBoxGeometry(BADGE_W, BADGE_H, 0.01, 3, 0.006));
+  const bayCentre = BAY_IN + SLAB / 2 + (W / 2 - SLAB - BAY_IN - SLAB / 2) / 2;
+  for (const [side, text] of Object.entries(options.badges) as Array<["left" | "right", string | undefined]>) {
+    if (!text) continue;
+    const face = track(new THREE.MeshStandardMaterial({ map: tex(badgeCanvas(text, fonts)), roughness: 0.34, metalness: 0.45 }));
+    const badge = new THREE.Mesh(badgeGeo, [badgeEdge, badgeEdge, badgeEdge, badgeEdge, face, badgeEdge]);
+    badge.position.set((side === "left" ? -1 : 1) * bayCentre, TOP - SLAB / 2 - 0.012, D / 2 + 0.006);
+    rig.add(badge);
+  }
+
   // Bookends at the outer end of each row.
   for (const bay of [-1, 1] as const) {
     const row = slots.filter((sl) => sl.bay === bay);
     if (!row.length) continue;
     const outer = row.reduce((m, sl) => (bay < 0 ? Math.min(m, sl.x) : Math.max(m, sl.x)), row[0].x);
-    box(0.03, 0.26, 0.24, oakInner, outer + bay * 0.17, BAY_FLOOR + 0.13, row[0].z);
+    box(0.03, 0.26, 0.24, oakInner, outer + bay * Math.min(0.17, W / 2 - SLAB - Math.abs(outer) - 0.03), BAY_FLOOR + 0.13, row[0].z);
   }
   const pickables = cases.map((c) => c.mesh);
 
