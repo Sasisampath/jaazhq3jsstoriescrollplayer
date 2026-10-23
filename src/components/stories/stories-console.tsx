@@ -46,6 +46,11 @@ const inRange = (p: number, [a, b]: readonly [number, number]) => p >= a && p <=
 
 type Hint = "choose" | null;
 
+type Phase = "idle" | "loading" | "moving" | "playing";
+
+/** Where the screen faces the visitor on the scroll timeline (the camera then settles into the watch view). */
+const WATCH_PROGRESS = 0.93;
+
 /** FIRST TAKE cases still on the shelf (the one in the player can't be browsed). */
 const shelfFirstTake = (inPlayer: number | null) => firstTake.map((m) => media.indexOf(m)).filter((i) => i !== inPlayer);
 
@@ -114,34 +119,29 @@ export function StoriesConsole() {
   const [loaded, setLoaded] = useState<number | null>(null);
   const [screenUp, setScreenUp] = useState(false);
   const [playing, setPlaying] = useState(false);
-  // "Watch" first moves the camera to the canonical square-on view; the player mounts only once it arrives.
-  const [watchPending, setWatchPending] = useState(false);
-  const viewingRef = useRef(false);
-
-  const watch = useCallback(() => {
-    const scene = sceneRef.current;
-    if (viewingRef.current) return;
-    viewingRef.current = true;
-    if (!scene) {
-      setPlaying(true);
-      return;
-    }
-    setWatchPending(true);
-    scene.view(true, () => {
-      if (!viewingRef.current) return;
-      setWatchPending(false);
-      setPlaying(true);
-    });
+  /* Playback pipeline phase. "loading": the chosen case is travelling into the player;
+     "moving": the page and camera are travelling to the watch view; "playing": the player is mounted.
+     While loading/moving, further choices are ignored so nothing doubles up. */
+  const [phase, setPhaseState] = useState<Phase>("idle");
+  const phaseRef = useRef<Phase>("idle");
+  const setPhase = useCallback((next: Phase) => {
+    phaseRef.current = next;
+    setPhaseState(next);
   }, []);
+  const runRef = useRef(0); // bumps on every new run or exit, so a stale run stops at its next step
+  const viewingRef = useRef(false); // camera held in the canonical watch view
+  const loadWaiters = useRef(new Map<number, () => void>());
 
   // Exit video (or anything that ends playback): unmount the player and give the camera back to scroll.
   const stopWatching = useCallback(() => {
-    if (!viewingRef.current) return;
-    viewingRef.current = false;
-    setWatchPending(false);
+    runRef.current += 1;
     setPlaying(false);
-    sceneRef.current?.view(false);
-  }, []);
+    setPhase("idle");
+    if (viewingRef.current) {
+      viewingRef.current = false;
+      sceneRef.current?.view(false);
+    }
+  }, [setPhase]);
   const [hint, setHint] = useState<Hint>(null);
   const [hovered, setHovered] = useState<number | null>(null);
   const [interacted, setInteracted] = useState(false);
@@ -182,7 +182,6 @@ export function StoriesConsole() {
       setPicking(false);
       userSelectedRef.current = true;
       setUserSelected(true);
-      stopWatching();
       save(index);
       if (index === selectedRef.current) {
         sceneRef.current?.acknowledge(); // already in the player: just a status-light nod
@@ -197,7 +196,86 @@ export function StoriesConsole() {
         applyFocus(shelf.find((i) => firstTake.indexOf(media[i]) > was) ?? shelf[shelf.length - 1] ?? null);
       }
     },
-    [markInteracted, stopWatching, applyFocus],
+    [markInteracted, applyFocus],
+  );
+
+  /** Resolves once the given case is fully inside the player (immediately if it already is). */
+  const waitLoaded = useCallback(
+    (index: number) =>
+      new Promise<void>((resolve) => {
+        if (loadedRef.current === index) resolve();
+        else loadWaiters.current.set(index, resolve);
+      }),
+    [],
+  );
+
+  /** Travel down the existing scroll timeline to where the screen faces the visitor, then resolve. */
+  const scrollToWatch = useCallback(
+    () =>
+      new Promise<void>((resolve) => {
+        const track = trackRef.current;
+        const sticky = stickyRef.current;
+        const probe = probeRef.current;
+        // Only on the scroll journey, and only once a choice has lifted the lock.
+        if (reduced || !track || !sticky || !probe || !userSelectedRef.current) {
+          resolve();
+          return;
+        }
+        const top = parseFloat(getComputedStyle(sticky).top) || 0;
+        const target = track.getBoundingClientRect().top + window.scrollY - top + (probe.offsetHeight - sticky.offsetHeight) * WATCH_PROGRESS;
+        window.scrollTo({ top: target, behavior: "smooth" });
+        const started = performance.now();
+        let last = window.scrollY;
+        let still = 0;
+        const check = () => {
+          const y = window.scrollY;
+          still = Math.abs(y - last) < 0.5 ? still + 1 : 0;
+          last = y;
+          if (Math.abs(y - target) < 2 || still > 8 || performance.now() - started > 2500) resolve();
+          else requestAnimationFrame(check);
+        };
+        requestAnimationFrame(check);
+      }),
+    [reduced],
+  );
+
+  /** Ease the camera into the one canonical, square-on watch view; resolves when it has arrived. */
+  const cameraToWatch = useCallback(
+    () =>
+      new Promise<void>((resolve) => {
+        const scene = sceneRef.current;
+        viewingRef.current = true;
+        if (!scene) resolve();
+        else scene.view(true, resolve);
+      }),
+    [],
+  );
+
+  /* The one pipeline behind every way to watch — clicking or tapping a case, the episode list,
+     Pick for me, and Watch episode:
+       select (if a case was chosen) → case inserted → page travels to the screen → camera settles
+       into the watch view → only then the YouTube player mounts and plays. */
+  const runPlayback = useCallback(
+    async (index: number | null) => {
+      if (phaseRef.current === "loading" || phaseRef.current === "moving") return;
+      stopWatching();
+      const run = runRef.current;
+      const alive = () => run === runRef.current;
+      if (index !== null) choose(index);
+      const target = index ?? selectedRef.current;
+      if (target === null) return;
+      setPhase("loading");
+      await waitLoaded(target);
+      if (!alive()) return;
+      setPhase("moving");
+      await scrollToWatch();
+      if (!alive()) return;
+      await cameraToWatch();
+      if (!alive()) return;
+      setPlaying(true);
+      setPhase("playing");
+    },
+    [stopWatching, choose, waitLoaded, scrollToWatch, cameraToWatch, setPhase],
   );
 
   /** ← / → , arrow keys, drag and swipe: move the archive focus one case along the FIRST TAKE shelf. */
@@ -213,10 +291,10 @@ export function StoriesConsole() {
   );
 
   /** "Pick for me": the focus runs along the shelf, slows, settles on a different case, and that case
-      then loads into the player (a deliberate choice, so it also unlocks the journey). Nothing autoplays. */
+      then goes through the same pipeline as a click — into the player, to the watch view, playing. */
   const pickForMe = useCallback(() => {
     const shelf = shelfFirstTake(selectedRef.current);
-    if (shelf.length < 2) return;
+    if (shelf.length < 2 || phaseRef.current === "loading" || phaseRef.current === "moving") return;
     markInteracted();
     pickTimers.current.forEach((t) => window.clearTimeout(t));
     const from = Math.max(0, shelf.indexOf(focusedRef.current ?? shelf[0]));
@@ -224,10 +302,10 @@ export function StoriesConsole() {
     const to = choices[Math.floor(Math.random() * choices.length)];
     if (reduced) {
       applyFocus(shelf[to]);
-      choose(shelf[to]);
+      void runPlayback(shelf[to]);
       return;
     }
-    const steps = shelf.length * 2 + ((to - from + shelf.length) % shelf.length); // two laps, then land
+    const steps = shelf.length + ((to - from + shelf.length) % shelf.length); // one lap, then land
     setPicking(true);
     let at = 0;
     for (let n = 1; n <= steps; n += 1) {
@@ -235,8 +313,8 @@ export function StoriesConsole() {
       pickTimers.current.push(window.setTimeout(() => applyFocus(shelf[(from + n) % shelf.length]), at));
     }
     // A short beat on the chosen cover, then it goes into the player.
-    pickTimers.current.push(window.setTimeout(() => choose(shelf[to]), at + 550));
-  }, [markInteracted, applyFocus, choose, reduced]);
+    pickTimers.current.push(window.setTimeout(() => void runPlayback(shelf[to]), at + 380));
+  }, [markInteracted, applyFocus, runPlayback, reduced]);
 
   useEffect(() => {
     const track = trackRef.current;
@@ -379,6 +457,11 @@ export function StoriesConsole() {
           onLoaded: (index) => {
             loadedRef.current = index;
             setLoaded(index);
+            const waiter = index !== null ? loadWaiters.current.get(index) : undefined;
+            if (waiter && index !== null) {
+              loadWaiters.current.delete(index);
+              waiter();
+            }
             requestSync();
           },
           onContextLost: () => {
@@ -518,7 +601,7 @@ export function StoriesConsole() {
       const index = scene.pick(x, y);
       if (index !== null) {
         preview(null);
-        choose(index);
+        void runPlayback(index);
       }
       return;
     }
@@ -526,7 +609,7 @@ export function StoriesConsole() {
     const index = scene.pick(x, y, 32);
     if (index !== null && index === hovered) {
       preview(null);
-      choose(index);
+      void runPlayback(index);
     } else preview(index);
   };
 
@@ -554,7 +637,7 @@ export function StoriesConsole() {
 
   return (
     <section
-      className={`st-stories st-stories--${mode}${mode === "scroll" && !userSelected ? " is-locked" : ""}${playing || watchPending ? " is-viewing" : ""}`}
+      className={`st-stories st-stories--${mode}${mode === "scroll" && !userSelected ? " is-locked" : ""}${playing || phase === "moving" ? " is-viewing" : ""}`}
       aria-labelledby="st-title"
       style={{ "--st-lock-p": CHECKPOINT[tallLayout ? "tall" : "wide"] } as React.CSSProperties}
     >
@@ -580,9 +663,9 @@ export function StoriesConsole() {
 
             {mode !== "static" && (
               <div ref={screenRef} className={`st-screen${screenUp && loadedItem ? " is-up" : ""}`}>
-                {loadedItem && screenUp && !playing && !watchPending && (
+                {loadedItem && screenUp && phase === "idle" && (
                   <>
-                    <button type="button" className="st-screen__play" onClick={watch} aria-label={`Watch ${named(loadedItem)}`}>
+                    <button type="button" className="st-screen__play" onClick={() => void runPlayback(null)} aria-label={`Watch ${named(loadedItem)}`}>
                       <span className="st-screen__glyph" aria-hidden>
                         <svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" /></svg>
                       </span>
@@ -607,10 +690,10 @@ export function StoriesConsole() {
             )}
 
             {mode !== "static" && (
-              <div ref={ctaRef} className="st-cta" data-on={Boolean(loadedItem && screenUp && !playing && !watchPending)}>
+              <div ref={ctaRef} className="st-cta" data-on={Boolean(loadedItem && screenUp && phase === "idle")}>
                 {loadedItem && (
                   <>
-                    <button type="button" className="st-cta__watch" onClick={watch}>
+                    <button type="button" className="st-cta__watch" onClick={() => void runPlayback(null)}>
                       {loadedItem.episode ? "Watch episode" : "Watch story"}
                     </button>
                     {loadedItem.href && (
@@ -637,13 +720,14 @@ export function StoriesConsole() {
                           ←
                         </button>
                         <span className="st-browse__count" aria-live="polite">
-                          EP. {media[focused].spineMark} of {String(firstTake.length).padStart(2, "0")}
+                          <span className="st-sr-only">Episode </span>
+                          {media[focused].spineMark} / {String(firstTake.length).padStart(2, "0")}
                         </span>
                         <button type="button" className="st-browse__step" onClick={() => browse(1)} aria-label="Next episode" disabled={picking}>
                           →
                         </button>
                       </div>
-                      <button type="button" className="st-browse__pick" onClick={pickForMe} disabled={picking}>
+                      <button type="button" className="st-browse__pick" onClick={pickForMe} disabled={picking || phase === "loading" || phase === "moving"}>
                         <svg className="st-browse__spark" viewBox="0 0 24 24" aria-hidden>
                           <path d="M12 2.5c.5 4.6 2.4 6.5 7 7-4.6.5-6.5 2.4-7 7-.5-4.6-2.4-6.5-7-7 4.6-.5 6.5-2.4 7-7Z" />
                           <path d="M19 14.5c.25 2 1 2.75 3 3-2 .25-2.75 1-3 3-.25-2-1-2.75-3-3 2-.25 2.75-1 3-3Z" />
@@ -691,7 +775,7 @@ export function StoriesConsole() {
                           type="button"
                           className="st-episode"
                           aria-pressed={userSelected && selected === index}
-                          onClick={() => choose(index)}
+                          onClick={() => void runPlayback(index)}
                           onFocus={() => preview(index)}
                           onBlur={() => preview(null)}
                         >

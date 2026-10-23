@@ -100,7 +100,7 @@ const SCREEN_RISE = SCREEN_H + 0.035;
 const FOV = 30;
 const PURPLE = 0x564ef0;
 
-const LOAD_SECONDS = 2.3;
+const LOAD_SECONDS = 1.9;
 const RAISE_SECONDS = 2.1;
 
 const clamp01 = (v: number) => THREE.MathUtils.clamp(v, 0, 1);
@@ -674,7 +674,7 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
     for (const c of cases) {
       const goal = c.target === 1 && busy(c) ? c.u : c.target;
       if (c.u !== goal) {
-        c.u = instant ? goal : goal > c.u ? Math.min(goal, c.u + dt / LOAD_SECONDS) : Math.max(goal, c.u - dt / (LOAD_SECONDS * 0.65));
+        c.u = instant ? goal : goal > c.u ? Math.min(goal, c.u + dt / LOAD_SECONDS) : Math.max(goal, c.u - dt / (LOAD_SECONDS * 0.55));
         moving = true;
       }
       const isHovered = cases.indexOf(c) === hovered && c.u === 0 && c.target === 0;
