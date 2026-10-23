@@ -618,8 +618,23 @@
     min-height: 40px;
   }
 
+  /* Portrait journey: full console → FIRST TAKE → watch (no separate More stories or player chapters). */
   .st-track {
-    --st-track-h: 520svh;
+    --st-track-h: 300svh;
+  }
+
+  .st-cta {
+    width: min(calc(100% - 40px), 320px);
+    gap: 12px;
+  }
+
+  .st-cta__watch {
+    min-height: 44px;
+    padding: 10px 22px;
+  }
+
+  .st-cta__notes {
+    padding: 4px 0;
   }
 }
 

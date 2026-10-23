@@ -62,8 +62,9 @@ type Options = {
   /** Stage point just under the hovered case (for a small attached label), or null. */
   onHoverAnchor: (point: { x: number; y: number } | null) => void;
   /** Stage points just under each shelf's row of cases and under the player (null when off-stage),
-      for the shelf captions and the Watch row. */
-  onAnchors: (anchors: { left: Point | null; right: Point | null; player: Point | null }) => void;
+      for the shelf captions and the Watch row. consoleBottom is the lowest projected point of the
+      furniture (its feet), reported even when it falls below the stage, for the portrait action zone. */
+  onAnchors: (anchors: { left: Point | null; right: Point | null; player: Point | null; consoleBottom: Point }) => void;
 };
 
 /* ── Dimensions (world units ≈ metres) ── */
@@ -127,16 +128,20 @@ const POSES = {
     // Watching: screen centred and square-on in its own plane, large, console top still in view.
     playback: [0, TOP + SCREEN_H / 2 - 0.14, SCREEN_Z, 1.5, 0.98, 0, 0.02, 0],
   },
+  // Portrait: the composition leaves room under the console for the page's action zone.
   tall: {
     full: [0, 0.5, 0, 1.68, 0.8, 0.5, 0.42, -0.04],
-    fullUp: [0, 1.0, -0.1, 1.68, 1.9, 0.42, 0.3, -0.1],
-    archiveLeft: [-0.84, 0.52, 0.3, 0.66, 0.45, 0.16, 0.12, -0.08],
-    archiveRight: [0.98, 0.52, 0.3, 0.7, 0.45, -0.16, 0.12, -0.08],
+    fullUp: [0, 1.0, -0.1, 1.68, 2.6, 0.42, 0.3, -0.1], // halfH only binds on short screens: zooms out under the heading
+    archiveLeft: [-0.66, 0.58, 0.3, 0.6, 0.45, 0.14, 0.26, -0.2],
     player: [0, 0.56, 0.3, 0.64, 0.42, 0, 0.08, 0],
-    screen: [0, TOP + SCREEN_H / 2 - 0.12, -0.1, 1.14, 0.9, 0, 0.05, 0],
-    playback: [0, TOP + SCREEN_H / 2 - 0.1, SCREEN_Z, 1.2, 0.95, 0, 0.02, 0],
+    // Watch: TV centred and square-on, console underneath, the Watch row below it.
+    screen: [0, 1.0, -0.1, 1.2, 1.0, 0, 0.06, -0.1],
+    playback: [0, 1.0, SCREEN_Z, 1.2, 1.0, 0, 0.02, 0.02],
   },
 } satisfies Record<StoriesLayout, Record<string, Pose>>;
+
+/** Portrait scroll timeline (progress spans); the console component's ranges follow it. */
+const TALL_TIMELINE = { archive: [0.04, 0.24], watch: [0.42, 0.76] } as const;
 
 const mix = (a: Pose, b: Pose, t: number) => a.map((v, i) => lerp(v, b[i], t)) as Pose;
 
@@ -603,12 +608,9 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
       return mix(pose, screenPose, span(p, 0.74, 0.9));
     }
     const P = POSES.tall;
-    const screenPose = mix(P.player, P.screen, up);
-    // full → FIRST TAKE (left) → More stories (right) → player → screen
-    let pose = mix(mix(P.full, P.fullUp, up), P.archiveLeft, span(p, 0.05, 0.24));
-    pose = mix(pose, P.archiveRight, span(p, 0.34, 0.44));
-    pose = mix(pose, P.player, span(p, 0.54, 0.64));
-    return mix(pose, screenPose, span(p, 0.7, 0.88));
+    // Portrait keeps it short: full → FIRST TAKE (browse) → watch. More stories stays tappable in every view.
+    const pose = mix(mix(P.full, P.fullUp, up), P.archiveLeft, span(p, TALL_TIMELINE.archive[0], TALL_TIMELINE.archive[1]));
+    return mix(pose, mix(P.player, P.screen, up), span(p, TALL_TIMELINE.watch[0], TALL_TIMELINE.watch[1]));
   };
 
   const applyCamera = (pose: Pose) => {
@@ -829,15 +831,30 @@ export async function createStoriesScene(canvas: HTMLCanvasElement, options: Opt
     const py = ((1 - corner.y) / 2) * height;
     return px > 0 && px < width && py > 0 && py < height ? { x: px, y: py } : null;
   };
+  const consoleBottomPoint = () => {
+    let y = -Infinity;
+    for (const [x, py, z] of [
+      [-(W / 2 - 0.16), 0, D / 2 - 0.13],
+      [W / 2 - 0.16, 0, D / 2 - 0.13],
+      [-W / 2, LEG_H, D / 2],
+      [W / 2, LEG_H, D / 2],
+    ]) {
+      corner.set(x, py, z).applyMatrix4(rig.matrixWorld).project(camera);
+      y = Math.max(y, ((1 - corner.y) / 2) * height);
+    }
+    corner.set(0, 0, D / 2).applyMatrix4(rig.matrixWorld).project(camera);
+    return { x: ((corner.x + 1) / 2) * width, y };
+  };
   let lastShelves = "";
   const reportShelves = () => {
     const left = shelfPoint(-1);
     const right = shelfPoint(1);
     const player = playerPoint();
-    const key = [left, right, player].map((p) => (p ? `${Math.round(p.x)},${Math.round(p.y)}` : "-")).join("|");
+    const consoleBottom = consoleBottomPoint();
+    const key = [left, right, player, consoleBottom].map((p) => (p ? `${Math.round(p.x)},${Math.round(p.y)}` : "-")).join("|");
     if (key !== lastShelves) {
       lastShelves = key;
-      options.onAnchors({ left, right, player });
+      options.onAnchors({ left, right, player, consoleBottom });
     }
   };
 

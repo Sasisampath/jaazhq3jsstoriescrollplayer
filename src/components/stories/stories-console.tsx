@@ -39,7 +39,8 @@ const CHECKPOINT = { wide: 0.3, tall: 0.28 } as const;
    archive browsing (focus + controls) takes over once the FIRST TAKE shelf is framed. */
 const RANGES = {
   wide: { shelves: [0, 0.55], browse: [0.14, 0.55] },
-  tall: { shelves: [0, 0.52], browse: [0.12, 0.52] },
+  // Portrait timeline (scene): full → FIRST TAKE by 0.24 → watch from 0.42.
+  tall: { shelves: [0.14, 0.4], browse: [0.14, 0.4] },
 } as const;
 
 const inRange = (p: number, [a, b]: readonly [number, number]) => p >= a && p <= b;
@@ -50,6 +51,10 @@ type Phase = "idle" | "loading" | "moving" | "playing";
 
 /** Where the screen faces the visitor on the scroll timeline (the camera then settles into the watch view). */
 const WATCH_PROGRESS = 0.93;
+
+/** Portrait action zone: gap under the console, and the least room kept at the bottom of the stage. */
+const CTA_GAP = 24;
+const CTA_EDGE = 16;
 
 /** FIRST TAKE cases still on the shelf (the one in the player can't be browsed). */
 const shelfFirstTake = (inPlayer: number | null) => firstTake.map((m) => media.indexOf(m)).filter((i) => i !== inPlayer);
@@ -98,7 +103,7 @@ export function StoriesConsole() {
   const labelRef = useRef<HTMLParagraphElement>(null);
   const firstTakeShelfRef = useRef<HTMLDivElement>(null);
   const ctaRef = useRef<HTMLDivElement>(null);
-  const anchorsRef = useRef<{ screen: ScreenRect | null; player: Point | null }>({ screen: null, player: null });
+  const anchorsRef = useRef<{ screen: ScreenRect | null; player: Point | null; consoleBottom: Point | null }>({ screen: null, player: null, consoleBottom: null });
   const probeRef = useRef<HTMLDivElement>(null);
   const interactedRef = useRef(false);
   const browseRef = useRef(false);
@@ -351,7 +356,8 @@ export function StoriesConsole() {
       sceneRef.current?.setProgress(p);
       const head = headRef.current;
       if (head && !reduced) {
-        const fade = Math.min(1, p / 0.09);
+        // Portrait: the heading stays until the camera has started toward the shelf.
+        const fade = isTallNow ? Math.min(1, Math.max(0, (p - 0.03) / 0.1)) : Math.min(1, p / 0.09);
         head.style.opacity = String(1 - fade);
         head.style.transform = `translate3d(0, ${-fade * 48}px, 0)`;
       }
@@ -387,7 +393,9 @@ export function StoriesConsole() {
 
     const onScreen = (rect: ScreenRect | null) => {
       const el = screenRef.current;
-      const usable = rect !== null && rect.top >= -4 && rect.width >= 200;
+      // Small portrait screens show the poster smaller; playback itself always frames it larger.
+      const minWidth = stage.clientWidth / Math.max(1, stage.clientHeight) < TALL_BELOW ? 160 : 200;
+      const usable = rect !== null && rect.top >= -4 && rect.width >= minWidth;
       if (el && rect && usable) {
         el.style.left = `${rect.left}px`;
         el.style.top = `${rect.top}px`;
@@ -400,16 +408,21 @@ export function StoriesConsole() {
       placeCta();
     };
 
-    // Watch / notes sit under the player when it's in view, otherwise under the screen.
+    // Watch / notes. Wide: under the player when it's in view, otherwise under the screen.
+    // Portrait: a page-level action zone, centred, a fixed gap below the bottom of the whole console.
     const placeCta = () => {
       const el = ctaRef.current;
       if (!el) return;
-      const { player, screen } = anchorsRef.current;
-      // Portrait shelves are narrow, so there the row drops below the shelf captions instead of sitting between them.
+      const { player, screen, consoleBottom } = anchorsRef.current;
       const portrait = stage.clientWidth / Math.max(1, stage.clientHeight) < TALL_BELOW;
-      const below = portrait ? 58 : 12;
-      const roomBelow = player && player.y + below < stage.clientHeight - 84;
-      const at = roomBelow ? { x: player.x, y: player.y + below } : screen ? { x: screen.left + screen.width / 2, y: screen.top + screen.height + 14 } : null;
+      let at: Point | null = null;
+      if (portrait) {
+        const lowest = stage.clientHeight - el.offsetHeight - CTA_EDGE;
+        if (consoleBottom && consoleBottom.y + CTA_GAP <= lowest) at = { x: stage.clientWidth / 2, y: consoleBottom.y + CTA_GAP };
+      } else {
+        const roomBelow = player && player.y + 12 < stage.clientHeight - 84;
+        at = roomBelow ? { x: player.x, y: player.y + 12 } : screen ? { x: screen.left + screen.width / 2, y: screen.top + screen.height + 14 } : null;
+      }
       if (at) {
         el.style.left = `${at.x}px`;
         el.style.top = `${at.y}px`;
@@ -432,14 +445,17 @@ export function StoriesConsole() {
             [FIRST_TAKE_SIDE === "left" ? "right" : "left"]: moreStories.length ? COLLECTION_LABEL["more-stories"].toUpperCase() : undefined,
           },
           onScreen,
-          onAnchors: ({ left, right, player }) => {
+          onAnchors: ({ left, right, player, consoleBottom }) => {
             anchorsRef.current.player = player;
+            anchorsRef.current.consoleBottom = consoleBottom;
             placeCta();
             const ftPoint = FIRST_TAKE_SIDE === "left" ? left : right;
+            // Portrait: the browse controls are centred on the page, under the shelf.
+            const centre = stage.clientWidth / Math.max(1, stage.clientHeight) < TALL_BELOW ? stage.clientWidth / 2 : null;
             for (const [el, point] of [[firstTakeShelfRef.current, ftPoint]] as const) {
               if (!el) continue;
               if (point) {
-                el.style.left = `${point.x}px`;
+                el.style.left = `${centre ?? point.x}px`;
                 el.style.top = `${point.y + 10}px`;
               }
               el.classList.toggle("is-placed", point !== null);
@@ -449,8 +465,11 @@ export function StoriesConsole() {
             const el = labelRef.current;
             if (!el) return;
             if (point) {
+              // Never on top of the browse controls: above them when the case sits low.
+              const controls = firstTakeShelfRef.current?.querySelector<HTMLElement>(".st-browse");
+              const ceiling = controls ? controls.getBoundingClientRect().top - stage.getBoundingClientRect().top - el.offsetHeight - 8 : Infinity;
               el.style.left = `${point.x}px`;
-              el.style.top = `${point.y + 12}px`;
+              el.style.top = `${Math.min(point.y + 12, ceiling)}px`;
             }
             el.classList.toggle("is-placed", point !== null);
           },
@@ -690,7 +709,7 @@ export function StoriesConsole() {
             )}
 
             {mode !== "static" && (
-              <div ref={ctaRef} className="st-cta" data-on={Boolean(loadedItem && screenUp && phase === "idle")}>
+              <div ref={ctaRef} className="st-cta" data-on={Boolean(loadedItem && screenUp && phase === "idle" && !(tallLayout && browsing))}>
                 {loadedItem && (
                   <>
                     <button type="button" className="st-cta__watch" onClick={() => void runPlayback(null)}>
