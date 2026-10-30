@@ -6,6 +6,7 @@ import { SHOW_TITLE, embedUrl, watchUrl } from "@/data/episodes";
 import { COLLECTION_LABEL, consoleMedia, type ConsoleMedia } from "@/data/media";
 import type { Point, ScreenRect, StoriesScene } from "./stories-console-scene";
 import { markNotesFromConsole } from "./back-to-first-take";
+import { STORY_KEY } from "./stories-session";
 
 /* FIRST TAKE — BY JAZZHQ: one console you can scroll through or simply use.
    The tall track is only a scroll distance; the stage stays sticky inside it and
@@ -19,7 +20,7 @@ import { markNotesFromConsole } from "./back-to-first-take";
 
 const REDUCED_QUERY = "(prefers-reduced-motion: reduce)";
 const TALL_BELOW = 0.85; // stage aspect under which the portrait camera path is used
-const STORAGE_KEY = "jazzhq-stories-episode";
+const STORAGE_KEY = STORY_KEY;
 
 const media = consoleMedia;
 const firstTake = media.filter((m) => m.collection === "first-take");

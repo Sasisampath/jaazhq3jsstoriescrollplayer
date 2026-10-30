@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { GridBackground } from "@/components/layout/grid-background";
 import { Header } from "@/components/layout/header";
 import Footer from "@/components/shared/footer";
-import { StoriesConsole } from "@/components/stories/stories-console";
+import { StoriesExperience } from "@/components/stories/stories-experience";
 import "@/components/stories/stories.css";
 import { pageSeo } from "@/lib/seo";
 import { SHOW_TITLE } from "@/data/episodes";
@@ -18,7 +18,7 @@ export default function StoriesPage() {
     <GridBackground>
       <Header />
       <main className="st-page flex-1">
-        <StoriesConsole />
+        <StoriesExperience />
       </main>
       <Footer />
     </GridBackground>

@@ -131,7 +131,7 @@ const POSES = {
   // Portrait: the composition leaves room under the console for the page's action zone.
   tall: {
     full: [0, 0.5, 0, 1.68, 0.8, 0.5, 0.42, -0.04],
-    fullUp: [0, 1.0, -0.1, 1.68, 2.6, 0.42, 0.3, -0.1], // halfH only binds on short screens: zooms out under the heading
+    fullUp: [0, 1.0, -0.1, 1.68, 2.6, 0.42, 0.3, -0.03], // halfH only binds on short screens: zooms out under the heading
     archiveLeft: [-0.66, 0.58, 0.3, 0.6, 0.45, 0.14, 0.26, -0.2],
     player: [0, 0.56, 0.3, 0.64, 0.42, 0, 0.08, 0],
     // Watch: TV centred and square-on, console underneath, the Watch row below it.
