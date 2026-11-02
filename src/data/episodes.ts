@@ -5,6 +5,7 @@
    previous/next and "More from First Take" are all generated from it. */
 
 import { firstTenCustomers2026 } from "./articles/first-10-customers-2026";
+import { kickYourCompetitionOutWithAeo } from "./articles/kick-your-competition-out-with-aeo";
 import { whenHowToHireYourFirstCro } from "./articles/when-how-to-hire-your-first-cro";
 
 export const SHOW_NAME = "FIRST TAKE";
@@ -93,10 +94,12 @@ const ALL: Episode[] = [
     episode: 3,
     slug: "kick-your-competition-out-with-aeo",
     title: "How to Kick Your Competition Out With AEO",
+    guest: "Vibin Baburajan",
     duration: "37:07",
     youtubeId: "ZUZJec316Yc",
     thumbnail: "/podcasts/kick-your-competition-out-with-aeo.jpg",
     topics: ["GTM", "AI"],
+    article: kickYourCompetitionOutWithAeo,
   },
   {
     episode: 4,
