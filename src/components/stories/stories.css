@@ -806,7 +806,8 @@
 }
 
 .st-gallery__head {
-  margin-bottom: clamp(36px, 5vw, 56px);
+  margin-bottom: 28px;
+  text-align: center;
 }
 
 .st-gallery__title {
@@ -1164,5 +1165,194 @@
 @media (max-width: 1023px) {
   .st-experience--3d .st-head {
     padding-top: 60px;
+  }
+}
+
+/* ── Gallery search + topic filters ── */
+.st-find {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  margin-bottom: clamp(36px, 5vw, 56px);
+}
+
+.st-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: min(100%, 620px);
+  height: 46px;
+  border: 1px solid #e8e3d7;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.95);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.st-search:focus-within {
+  border-color: var(--st-purple);
+  box-shadow: 0 0 0 3px rgb(86 78 240 / 0.14);
+}
+
+.st-search__icon {
+  position: absolute;
+  left: 14px;
+  color: var(--st-muted);
+  pointer-events: none;
+}
+
+.st-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 44px 0 42px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  font: inherit;
+  font-size: 16px; /* no iOS zoom on focus */
+  color: var(--st-ink);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.st-search input::placeholder {
+  color: #8a8f96;
+}
+
+.st-search input::-webkit-search-cancel-button,
+.st-search input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  display: none;
+}
+
+.st-search__clear {
+  position: absolute;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  color: var(--st-muted);
+  cursor: pointer;
+}
+
+.st-search__clear:hover {
+  background: #f1eee5;
+  color: var(--st-ink);
+}
+
+/* One quiet row that scrolls sideways on narrow screens instead of wrapping. */
+.st-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.st-chips::-webkit-scrollbar {
+  display: none;
+}
+
+/* Centered when the row fits; auto margins (not justify-content) so a row that
+   overflows still starts at its first chip and scrolls. */
+.st-chips {
+  max-width: 100%;
+}
+
+.st-chips > :first-child {
+  margin-left: auto;
+}
+
+.st-chips > :last-child {
+  margin-right: auto;
+}
+
+.st-chip {
+  flex: none;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--st-muted);
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.st-chip:hover:not([aria-pressed="true"]) {
+  background: #f1eee5;
+  color: var(--st-ink);
+}
+
+.st-chip[aria-pressed="true"] {
+  background: #18171c;
+  color: #fff;
+}
+
+.st-g-clear {
+  justify-self: start;
+  margin: -12px 0 24px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--st-muted);
+  text-decoration: underline;
+  text-decoration-color: rgb(36 36 36 / 0.25);
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.st-g-clear:hover,
+.st-g-clear:focus-visible {
+  color: var(--st-ink);
+  text-decoration-color: currentColor;
+}
+
+.st-g-empty {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  padding: 8px 0 24px;
+}
+
+.st-g-empty h2 {
+  margin: 0;
+  font-family: var(--st-font-display);
+  font-size: clamp(22px, 2.6vw, 28px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.st-g-empty p {
+  margin: 0;
+  color: var(--st-muted);
+}
+
+.st-g-empty .st-g-clear {
+  margin: 10px 0 0;
+}
+
+.st-g-results .st-g-section__head h2 {
+  text-transform: none;
+}
+
+@media (max-width: 639px) {
+  /* The switch joins the centered hero. */
+  .st-experience--gallery .st-viewbar__inner {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    justify-items: center;
+  }
+
+  /* The chip row bleeds to the screen edges so it reads as swipeable. */
+  .st-chips {
+    justify-self: stretch;
+    max-width: none;
+    margin-inline: calc(var(--page-padding) * -1);
+    padding-inline: var(--page-padding);
   }
 }

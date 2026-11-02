@@ -42,6 +42,12 @@ export type EpisodeArticle = {
   sections: ArticleSection[];
 };
 
+/* Broad discovery topics for the Gallery filters. Series (First Take, More stories) are
+   separate: they are collections, not topics. Keep this list short; specific names
+   (AEO, CRO, APAC …) belong in search, which reads titles and guests. */
+export const TOPICS = ["GTM", "Partnerships", "AI", "Product", "Careers"] as const;
+export type Topic = (typeof TOPICS)[number];
+
 export type Episode = {
   episode: number;
   slug: string;
@@ -51,6 +57,8 @@ export type Episode = {
   duration: string;
   youtubeId: string;
   thumbnail: string;
+  /** Only topics the title or notes clearly support. */
+  topics?: Topic[];
   /** Only add a description that has actually been supplied. */
   description?: string;
   /** Long-form episode notes for /stories/[slug]; the table of contents is built from its sections. */
@@ -66,6 +74,7 @@ const ALL: Episode[] = [
     duration: "50:42",
     youtubeId: "W43U1TYK0WM",
     thumbnail: "/podcasts/first-10-customers-2026.jpg",
+    topics: ["GTM"],
   },
   {
     episode: 2,
@@ -75,6 +84,7 @@ const ALL: Episode[] = [
     duration: "36:14",
     youtubeId: "t4Hfn3ZZ6Oo",
     thumbnail: "/podcasts/when-how-to-hire-your-first-cro.jpg",
+    topics: ["GTM", "Careers"],
     article: whenHowToHireYourFirstCro,
   },
   {
@@ -84,6 +94,7 @@ const ALL: Episode[] = [
     duration: "37:07",
     youtubeId: "ZUZJec316Yc",
     thumbnail: "/podcasts/kick-your-competition-out-with-aeo.jpg",
+    topics: ["GTM", "AI"],
   },
   {
     episode: 4,
@@ -93,6 +104,7 @@ const ALL: Episode[] = [
     duration: "31:41",
     youtubeId: "gJj-wYYuT5w",
     thumbnail: "/podcasts/winning-in-apac.jpg",
+    topics: ["GTM"],
   },
 ];
 

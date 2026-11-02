@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { X } from "lucide-react";
-import { durationLabel, embedUrl, isoDuration } from "@/data/episodes";
+import { Search, X } from "lucide-react";
+import { TOPICS, durationLabel, embedUrl, isoDuration, type Topic } from "@/data/episodes";
 import { COLLECTION_LABEL, consoleMedia, type ConsoleMedia } from "@/data/media";
 import { markNotesFromConsole } from "./back-to-first-take";
+import { searchStories } from "./stories-search";
 import { STORY_KEY, writeSession } from "./stories-session";
 
 /* The Gallery view: the same consoleMedia as the 3D console, as ordinary
@@ -138,6 +139,8 @@ function VideoOverlay({ item, onClose }: { item: ConsoleMedia; onClose: () => vo
 
 export function StoriesGallery() {
   const [playing, setPlaying] = useState<ConsoleMedia | null>(null);
+  const [query, setQuery] = useState("");
+  const [topic, setTopic] = useState<Topic | null>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
 
   const play = useCallback((item: ConsoleMedia, trigger: HTMLElement) => {
@@ -154,6 +157,17 @@ export function StoriesGallery() {
     requestAnimationFrame(() => trigger?.focus({ preventScroll: true }));
   }, []);
 
+  const clear = useCallback(() => {
+    setQuery("");
+    setTopic(null);
+  }, []);
+
+  const term = query.trim();
+  const filtering = term !== "" || topic !== null;
+  const results = useMemo(() => (filtering ? searchStories(term, topic) : []), [filtering, term, topic]);
+  const count = `${results.length} ${results.length === 1 ? "story" : "stories"}`;
+  const resultsTitle = topic && term ? `${topic} · “${term}”` : topic ? topic : `Results for “${term}”`;
+
   return (
     <section className="st-gallery" aria-labelledby="st-gallery-title">
       <header className="st-gallery__head">
@@ -163,38 +177,107 @@ export function StoriesGallery() {
         <p>Conversations worth watching.</p>
       </header>
 
-      {firstTake.length > 0 && (
-        <section className="st-g-section" aria-labelledby="st-g-first-take">
-          <div className="st-g-section__head">
-            <h2 id="st-g-first-take">{COLLECTION_LABEL["first-take"]}</h2>
-            <span className="st-g-section__rule" aria-hidden />
-            <span className="st-g-section__count">{firstTake.length} episodes</span>
-          </div>
-          <ol className="st-g-grid st-g-grid--lead">
-            {firstTake.map((item, i) => (
-              <li key={item.key}>
-                <Card item={item} lead eager={i < 2} onPlay={play} />
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
+      <div className="st-find">
+        <form className="st-search" role="search" onSubmit={(event) => event.preventDefault()}>
+          <Search className="st-search__icon" size={18} strokeWidth={1.75} aria-hidden />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && query) {
+                event.preventDefault();
+                setQuery("");
+              }
+            }}
+            placeholder="Search stories, guests or topics..."
+            aria-label="Search stories, guests or topics"
+            autoComplete="off"
+            enterKeyHint="search"
+          />
+          {query && (
+            <button type="button" className="st-search__clear" onClick={() => setQuery("")} aria-label="Clear search">
+              <X size={16} strokeWidth={2} aria-hidden />
+            </button>
+          )}
+        </form>
+        <div className="st-chips" role="group" aria-label="Filter by topic">
+          {[null, ...TOPICS].map((value) => (
+            <button key={value ?? "all"} type="button" className="st-chip" aria-pressed={topic === value} onClick={() => setTopic(value)}>
+              {value ?? "All"}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      {moreStories.length > 0 && (
-        <section className="st-g-section" aria-labelledby="st-g-more">
-          <div className="st-g-section__head">
-            <h2 id="st-g-more">{COLLECTION_LABEL["more-stories"]}</h2>
-            <span className="st-g-section__rule" aria-hidden />
-            <span className="st-g-section__count">{moreStories.length} stories</span>
-          </div>
-          <ol className="st-g-grid st-g-grid--more">
-            {moreStories.map((item) => (
-              <li key={item.key}>
-                <Card item={item} lead={false} eager={false} onPlay={play} />
-              </li>
-            ))}
-          </ol>
+      {filtering ? (
+        <section className="st-g-section st-g-results" aria-labelledby="st-g-results">
+          {results.length > 0 ? (
+            <>
+              <div className="st-g-section__head">
+                <h2 id="st-g-results">{resultsTitle}</h2>
+                <span className="st-g-section__rule" aria-hidden />
+                <span className="st-g-section__count" role="status">
+                  {count}
+                </span>
+              </div>
+              <button type="button" className="st-g-clear" onClick={clear}>
+                Clear filters
+              </button>
+              <ol className="st-g-grid st-g-grid--more">
+                {results.map((item) => (
+                  <li key={item.key}>
+                    <Card item={item} lead={false} eager={false} onPlay={play} />
+                  </li>
+                ))}
+              </ol>
+            </>
+          ) : (
+            <div className="st-g-empty" role="status">
+              <h2 id="st-g-results">No stories found.</h2>
+              <p>Try another search or topic.</p>
+              <button type="button" className="st-g-clear" onClick={clear}>
+                Clear filters
+              </button>
+            </div>
+          )}
         </section>
+      ) : (
+        <>
+          {firstTake.length > 0 && (
+            <section className="st-g-section" aria-labelledby="st-g-first-take">
+              <div className="st-g-section__head">
+                <h2 id="st-g-first-take">{COLLECTION_LABEL["first-take"]}</h2>
+                <span className="st-g-section__rule" aria-hidden />
+                <span className="st-g-section__count">{firstTake.length} episodes</span>
+              </div>
+              <ol className="st-g-grid st-g-grid--lead">
+                {firstTake.map((item, i) => (
+                  <li key={item.key}>
+                    <Card item={item} lead eager={i < 2} onPlay={play} />
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+
+          {moreStories.length > 0 && (
+            <section className="st-g-section" aria-labelledby="st-g-more">
+              <div className="st-g-section__head">
+                <h2 id="st-g-more">{COLLECTION_LABEL["more-stories"]}</h2>
+                <span className="st-g-section__rule" aria-hidden />
+                <span className="st-g-section__count">{moreStories.length} stories</span>
+              </div>
+              <ol className="st-g-grid st-g-grid--more">
+                {moreStories.map((item) => (
+                  <li key={item.key}>
+                    <Card item={item} lead={false} eager={false} onPlay={play} />
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+        </>
       )}
 
       {playing && <VideoOverlay item={playing} onClose={close} />}

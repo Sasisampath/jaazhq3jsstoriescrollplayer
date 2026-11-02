@@ -1,4 +1,4 @@
-import { episodeHref, episodeNumber, episodes, type Episode } from "./episodes";
+import { episodeHref, episodeNumber, episodes, type Episode, type Topic } from "./episodes";
 
 /* Everything stored in the Stories console, from one list.
    - Left shelf: FIRST TAKE, the primary collection (from episodes.ts).
@@ -12,6 +12,10 @@ export type Conversation = {
   duration: string;
   youtubeId: string;
   thumbnail: string;
+  /** Broad topics the title clearly supports (see TOPICS in episodes.ts). */
+  topics?: Topic[];
+  /** Only where the title names it. */
+  company?: string;
   /** false keeps it off the console (e.g. the video is still private on YouTube). */
   published?: boolean;
 };
@@ -30,54 +34,68 @@ export const conversations: Conversation[] = [
     duration: "30:06",
     youtubeId: "HDT_uGDf6L8",
     thumbnail: "/podcasts/conversations/HDT_uGDf6L8.jpg",
+    topics: ["Product"],
+    company: "Rocketlane · Xceptor",
   },
   {
     title: "Partnership Playbook: Driving Revenue Through Events (ft. Ben Roodman, Founder - HeyBTW)",
     duration: "31:41",
     youtubeId: "ygK1Lo627DU",
     thumbnail: "/podcasts/conversations/ygK1Lo627DU.jpg",
+    topics: ["Partnerships", "GTM"],
+    company: "HeyBTW",
   },
   {
     title: "A GTM Maestro's Playbook in the AI Age ft. Alex Scholz",
     duration: "36:23",
     youtubeId: "OdosnBGjkPA",
     thumbnail: "/podcasts/conversations/OdosnBGjkPA.jpg",
+    topics: ["GTM", "AI"],
   },
   {
     title: "Why Most SaaS Partnerships Fail and How to Fix Them ft. Issac Betanzos",
     duration: "36:16",
     youtubeId: "PAnkrsmvp0s",
     thumbnail: "/podcasts/conversations/PAnkrsmvp0s.jpg",
+    topics: ["Partnerships"],
   },
   {
     title: "Cracking Product Hunt ft. Laura Cruickshanks (Atlas)",
     duration: "49:50",
     youtubeId: "rLvphVCBpk0",
     thumbnail: "/podcasts/conversations/rLvphVCBpk0.jpg",
+    topics: ["Product", "GTM"],
+    company: "Atlas",
   },
   {
     title: "Your SaaS sales blueprint for 2025 and beyond ft. Shuba Baskaran",
     duration: "38:36",
     youtubeId: "dzpbu4s-dLc",
     thumbnail: "/podcasts/conversations/dzpbu4s-dLc.jpg",
+    topics: ["GTM"],
   },
   {
     title: "The Unfiltered Truth About Demo Day ft. Nick Armstrong (Chirp)",
     duration: "31:36",
     youtubeId: "3SwuKwkuIKA",
     thumbnail: "/podcasts/conversations/3SwuKwkuIKA.jpg",
+    company: "Chirp",
   },
   {
     title: "The ONLY SaaS partnerships masterclass you’ll ever need: a deep dive ft Heather Pertel @rocketlane",
     duration: "36:21",
     youtubeId: "s5E0xEiMbQY",
     thumbnail: "/podcasts/conversations/s5E0xEiMbQY.jpg",
+    topics: ["Partnerships"],
+    company: "Rocketlane",
   },
   {
     title: "Applying to @ycombinator in 2025? Watch this video NOW! Sneha: Merlin AI (YC S24) spills the tea",
     duration: "38:08",
     youtubeId: "mnpfQQn7OH4",
     thumbnail: "/podcasts/conversations/mnpfQQn7OH4.jpg",
+    topics: ["AI"],
+    company: "Merlin AI",
   },
 ];
 
@@ -99,6 +117,8 @@ export type ConsoleMedia = {
   duration: string;
   youtubeId: string;
   thumbnail: string;
+  topics: readonly Topic[];
+  company?: string;
   /** First Take only. */
   episode?: Episode;
   /** Notes page, when one exists. */
@@ -124,6 +144,7 @@ export const consoleMedia: ConsoleMedia[] = [
       duration: e.duration,
       youtubeId: e.youtubeId,
       thumbnail: e.thumbnail,
+      topics: e.topics ?? [],
       episode: e,
       href: episodeHref(e),
       kicker: `FIRST TAKE · EP ${episodeNumber(e)}`,
@@ -144,6 +165,8 @@ export const consoleMedia: ConsoleMedia[] = [
         duration: c.duration,
         youtubeId: c.youtubeId,
         thumbnail: c.thumbnail,
+        topics: c.topics ?? [],
+        company: c.company,
         kicker: "JAZZHQ · STORY",
         label: c.title,
         caption: `STORY · ${c.duration}`,
