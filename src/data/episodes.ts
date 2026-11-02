@@ -4,6 +4,7 @@
    console screen, the accessible list, the /stories/[slug] page, its metadata,
    previous/next and "More from First Take" are all generated from it. */
 
+import { firstTenCustomers2026 } from "./articles/first-10-customers-2026";
 import { whenHowToHireYourFirstCro } from "./articles/when-how-to-hire-your-first-cro";
 
 export const SHOW_NAME = "FIRST TAKE";
@@ -75,6 +76,7 @@ const ALL: Episode[] = [
     youtubeId: "W43U1TYK0WM",
     thumbnail: "/podcasts/first-10-customers-2026.jpg",
     topics: ["GTM"],
+    article: firstTenCustomers2026,
   },
   {
     episode: 2,
