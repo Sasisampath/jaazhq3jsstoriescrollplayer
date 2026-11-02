@@ -7,6 +7,7 @@
 import { firstTenCustomers2026 } from "./articles/first-10-customers-2026";
 import { kickYourCompetitionOutWithAeo } from "./articles/kick-your-competition-out-with-aeo";
 import { whenHowToHireYourFirstCro } from "./articles/when-how-to-hire-your-first-cro";
+import { winningInApac } from "./articles/winning-in-apac";
 
 export const SHOW_NAME = "FIRST TAKE";
 export const SHOW_BYLINE = "BY JAZZHQ";
@@ -110,6 +111,7 @@ const ALL: Episode[] = [
     youtubeId: "gJj-wYYuT5w",
     thumbnail: "/podcasts/winning-in-apac.jpg",
     topics: ["GTM"],
+    article: winningInApac,
   },
 ];
 
